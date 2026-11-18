@@ -1,0 +1,2795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpotShare — Hyper-Local P2P Parking Network</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- High-reliability CDN Leaflet CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <!-- High-reliability CDN Leaflet JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface:  { DEFAULT: '#F8FAFC', 50: '#FFFFFF', 100: '#F1F5F9', 200: '#E2E8F0', 300: '#CBD5E1', 400: '#94A3B8' },
+            brand:    { 50: '#EFF6FF', 100: '#DBEAFE', 200: '#BFDBFE', 300: '#93C5FD', 400: '#60A5FA', 500: '#3B82F6', 600: '#2563EB', 700: '#1D4ED8' },
+            cyanAccent: { 50: '#ECFEFF', 100: '#CFFAFE', 400: '#22D3EE', 500: '#06B6D4', 600: '#0891B2' },
+            emeraldBadge: { 50: '#ECFDF5', 100: '#D1FAE5', 500: '#10B981', 600: '#059669' },
+            roseBadge:    { 50: '#FFF1F2', 100: '#FFE4E6', 500: '#F43F5E', 600: '#E11D48' },
+            amberAccent:  { 50: '#FFFBEB', 100: '#FEF3C7', 400: '#FBBF24', 500: '#F59E0B', 600: '#D97706' },
+            ink:      { DEFAULT: '#0F172A', 50: '#1E293B', 100: '#334155', 200: '#475569', 300: '#64748B', 400: '#94A3B8' },
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'SFMono-Regular', 'Menlo', 'monospace'],
+          },
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #0F172A;
+      background: #F8FAFC;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* ---- Luminous Ambient Canvas Backdrop ---- */
+    .ambient-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 10% 10%, rgba(219, 234, 254, 0.45) 0%, transparent 40%),
+                  radial-gradient(circle at 90% 20%, rgba(224, 242, 254, 0.6) 0%, transparent 45%),
+                  radial-gradient(circle at 50% 85%, rgba(240, 253, 250, 0.5) 0%, transparent 55%),
+                  linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+    }
+
+    /* ---- Smooth Scrollbar ---- */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+    /* ---- Leaflet Custom Polish ---- */
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 520px;
+      position: relative;
+      z-index: 10;
+      border-radius: 0 0 18px 18px;
+    }
+    .leaflet-div-icon {
+      background: transparent !important;
+      border: none !important;
+    }
+    .leaflet-control-zoom { border: none !important; box-shadow: none !important; margin: 16px !important; }
+    .leaflet-control-zoom a {
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(12px) !important;
+      color: #334155 !important;
+      border: 1px solid rgba(226, 232, 240, 0.9) !important;
+      border-radius: 12px !important;
+      width: 36px !important; height: 36px !important; line-height: 36px !important;
+      font-size: 15px !important; font-weight: 700 !important;
+      margin-bottom: 6px !important;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08) !important;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+    .leaflet-control-zoom a:hover {
+      background: #FFFFFF !important;
+      color: #2563EB !important;
+      transform: scale(1.05);
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.16) !important;
+    }
+    .leaflet-popup-content-wrapper {
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(16px);
+      color: #0F172A;
+      border-radius: 16px;
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      box-shadow: 0 16px 48px -8px rgba(15, 23, 42, 0.14);
+      padding: 0;
+      overflow: hidden;
+    }
+    .leaflet-popup-tip { background: #FFFFFF; }
+    .leaflet-popup-content { margin: 14px 18px; font-family: 'Inter', sans-serif; }
+
+    /* ---- Micro-Animations ---- */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(28px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes pulseRing {
+      0%   { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+      70%  { box-shadow: 0 0 0 12px rgba(37, 99, 235, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+    }
+    @keyframes userHalo {
+      0%   { transform: scale(0.85); opacity: 0.9; }
+      50%  { transform: scale(1.4); opacity: 0.2; }
+      100% { transform: scale(0.85); opacity: 0.9; }
+    }
+    @keyframes checkDraw {
+      0%   { stroke-dashoffset: 40; }
+      100% { stroke-dashoffset: 0; }
+    }
+
+    .anim-fadeUp  { animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .anim-slideUp { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+    .stagger-1 { animation-delay: 0.04s; }
+    .stagger-2 { animation-delay: 0.08s; }
+    .stagger-3 { animation-delay: 0.12s; }
+    .stagger-4 { animation-delay: 0.16s; }
+
+    /* ---- Luminous Glass Card Surface ---- */
+    .crystal-card {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(20px) saturate(1.8);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      border-radius: 18px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03),
+                  0 6px 24px -4px rgba(15, 23, 42, 0.05);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .crystal-card:hover {
+      box-shadow: 0 12px 36px -6px rgba(37, 99, 235, 0.1),
+                  0 2px 8px rgba(15, 23, 42, 0.04);
+    }
+    .card-active-glow {
+      border-color: rgba(37, 99, 235, 0.4) !important;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12),
+                  0 12px 32px -4px rgba(37, 99, 235, 0.14) !important;
+      transform: translateY(-2px);
+    }
+
+    /* ---- Interactive Role Pill Switcher ---- */
+    .pill-track {
+      position: relative;
+      display: flex;
+      background: rgba(241, 245, 249, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      border-radius: 14px;
+      padding: 4px;
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .pill-indicator {
+      position: absolute;
+      top: 4px; bottom: 4px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+      transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1), width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+    }
+    .pill-btn {
+      position: relative;
+      z-index: 2;
+      padding: 7px 18px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: color 0.25s ease;
+      display: flex; align-items: center; gap: 7px;
+      white-space: nowrap;
+      border: none; background: none;
+    }
+    .pill-btn.active { color: #FFFFFF; }
+    .pill-btn:not(.active) { color: #64748B; }
+    .pill-btn:not(.active):hover { color: #1E293B; }
+
+    /* ---- High-Affordance Primary Action Button ---- */
+    .btn-gradient {
+      background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+      color: #FFFFFF;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
+    }
+    .btn-gradient:hover {
+      transform: translateY(-1.5px);
+      box-shadow: 0 8px 24px rgba(37, 99, 235, 0.38);
+      filter: brightness(1.04);
+    }
+    .btn-gradient:active {
+      transform: translateY(0) scale(0.98);
+    }
+
+    /* ---- Secondary Button ---- */
+    .btn-neutral {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      color: #475569;
+      font-weight: 600;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-neutral:hover {
+      background: #F8FAFC;
+      border-color: #CBD5E1;
+      color: #0F172A;
+    }
+
+    /* ---- Modern Input Box ---- */
+    .input-field {
+      width: 100%;
+      background: #FFFFFF;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: #0F172A;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .input-field:focus {
+      border-color: #3B82F6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+
+    /* ---- Leaflet Pin Styles ---- */
+    .marker-pin-custom {
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .marker-pin-custom:hover {
+      transform: scale(1.18);
+    }
+    .marker-available {
+      background: linear-gradient(135deg, #2563EB, #06B6D4);
+      color: #FFFFFF;
+      border: 2.5px solid #FFFFFF;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+      animation: pulseRing 3s infinite;
+    }
+    .marker-occupied {
+      background: #E2E8F0;
+      color: #94A3B8;
+      border: 2px solid #FFFFFF;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    }
+    .marker-user {
+      width: 18px; height: 18px;
+      background: #2563EB;
+      border: 3px solid #FFFFFF;
+      border-radius: 50%;
+      box-shadow: 0 2px 10px rgba(37, 99, 235, 0.5);
+      position: relative;
+    }
+    .marker-user::after {
+      content: '';
+      position: absolute;
+      inset: -9px;
+      background: rgba(37, 99, 235, 0.25);
+      border-radius: 50%;
+      animation: userHalo 2s infinite ease-out;
+    }
+
+    /* ---- Toast Notifications ---- */
+    .toast-tray {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 10px;
+    }
+    .toast-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 14px;
+      padding: 13px 18px;
+      display: flex; align-items: center; gap: 12px;
+      box-shadow: 0 10px 32px -4px rgba(15, 23, 42, 0.12);
+      animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+      min-width: 290px; max-width: 400px;
+    }
+    .toast-exit {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+      transition: all 0.25s ease;
+    }
+
+    /* ---- Modals Backdrop ---- */
+    .modal-scrim {
+      position: fixed; inset: 0;
+      background: rgba(15, 23, 42, 0.38);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: none; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .modal-scrim.active { display: flex; }
+    .modal-window {
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 22px;
+      width: 100%; max-width: 440px;
+      box-shadow: 0 24px 70px -12px rgba(15, 23, 42, 0.18);
+      overflow: hidden;
+      animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    input[type=range] {
+      accent-color: #2563EB;
+    }
+  </style>
+</head>
+
+<body class="selection:bg-brand-100 selection:text-brand-700 min-h-screen flex flex-col antialiased">
+
+  <!-- Ambient Backdrop -->
+  <div class="ambient-canvas"></div>
+
+  <!-- Toast Notification Stack -->
+  <div id="toastTray" class="toast-tray"></div>
+
+  <!-- Top Sticky Navigation -->
+  <header class="sticky top-0 z-50 border-b border-surface-200/70"
+          style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px) saturate(1.8);">
+    <div class="max-w-7xl mx-auto px-4 lg:px-6 h-[64px] flex items-center justify-between">
+
+      <!-- Logo & City Anchor -->
+      <div class="flex items-center gap-3.5 anim-fadeUp">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-lg font-black shadow-md shadow-brand-500/25"
+             style="background: linear-gradient(135deg, #2563EB 0%, #06B6D4 100%);">
+          <i class="fa-solid fa-square-parking"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-lg font-extrabold tracking-tight text-ink">Spot<span class="text-brand-600">Share</span></span>
+            <span class="text-[10px] tracking-wide font-bold bg-emeraldBadge-50 text-emeraldBadge-600 px-2.5 py-0.5 rounded-full border border-emeraldBadge-100 flex items-center gap-1.5 shadow-xs">
+              <span class="w-1.5 h-1.5 rounded-full bg-emeraldBadge-500 animate-pulse"></span> Bengaluru Verified
+            </span>
+          </div>
+          <p class="text-[11px] text-ink-300 hidden sm:block">Rent private driveways & verified parking in your neighborhood</p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher Pill -->
+      <div class="pill-track anim-fadeUp stagger-1" id="rolePillTrack">
+        <div class="pill-indicator" id="rolePillIndicator"></div>
+        <button class="pill-btn active" id="btnDriverRole" onclick="switchUserRole('driver')">
+          <i class="fa-solid fa-car-side text-xs"></i> <span>Find a Spot</span>
+        </button>
+        <button class="pill-btn" id="btnHostRole" onclick="switchUserRole('host')">
+          <i class="fa-solid fa-house-user text-xs"></i> <span>Rent Your Space</span>
+        </button>
+      </div>
+
+      <!-- Right Controls & Active Pass Badge -->
+      <div class="flex items-center gap-3 anim-fadeUp stagger-2">
+        <div id="navPassBadge" class="hidden cursor-pointer" onclick="reopenActivePassModal()">
+          <span class="text-xs bg-emeraldBadge-50 text-emeraldBadge-600 border border-emeraldBadge-100 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 hover:bg-emeraldBadge-100 transition-all shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-emeraldBadge-500 animate-ping"></span>
+            <span>Active Pass: <span id="navPassCode">#SPT-LIVE</span></span>
+          </span>
+        </div>
+        <div class="hidden md:flex items-center gap-2 text-xs text-ink-300 bg-surface-100/80 border border-surface-200 px-3 py-1.5 rounded-xl">
+          <i class="fa-solid fa-location-dot text-brand-500"></i>
+          <span id="activeAnchorLabel">Indiranagar, BLR</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Viewport Layout -->
+  <main class="relative z-10 flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+    <!-- Left Column: Controls & Dynamic Feeds -->
+    <section class="lg:col-span-5 flex flex-col gap-4">
+
+      <!-- ================= DRIVER VIEW ================= -->
+      <div id="driverContainer" class="space-y-4">
+
+        <!-- Active Booking Management Banner (Shown when user has an active reservation) -->
+        <div id="driverActiveBookingBanner" class="hidden crystal-card p-4 border border-brand-200 bg-gradient-to-r from-blue-50/90 via-white to-cyan-50/90 anim-fadeUp shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0 mt-0.5">
+                <i class="fa-solid fa-car"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-ink" id="bannerSlotTitle">12th Main Villa Driveway</span>
+                  <span class="text-[10px] bg-emeraldBadge-50 text-emeraldBadge-600 border border-emeraldBadge-100 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emeraldBadge-500 animate-pulse"></span> Active
+                  </span>
+                </div>
+                <p class="text-[11px] text-ink-300 mt-0.5" id="bannerSlotTime">Valid Session • <span id="bannerCountdown" class="font-mono font-bold text-brand-600">--:--</span> remaining</p>
+                <div class="flex items-center gap-2 mt-2">
+                  <button onclick="reopenActivePassModal()" class="btn-gradient px-3 py-1 text-xs font-semibold flex items-center gap-1">
+                    <i class="fa-solid fa-qrcode text-[10px]"></i> View Pass
+                  </button>
+                  <button onclick="openReportIssueModal()" class="px-2.5 py-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-medium transition-colors flex items-center gap-1" title="Report Issue & 100% Refund">
+                    <i class="fa-solid fa-camera text-[10px]"></i> Issue / Refund
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button onclick="fastForwardSessionToExpiry()" class="text-[10px] font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 px-2 py-1 rounded-lg transition-colors flex-shrink-0 flex items-center gap-1" title="Fast-forward timer to test automatic clearance">
+              <i class="fa-solid fa-forward-step text-[9px]"></i> Test Auto-Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Search & Spatial Filter Card -->
+        <div class="crystal-card p-5 anim-fadeUp">
+          <div class="flex items-center justify-between mb-3.5">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center text-xs font-bold border border-brand-100">
+                <i class="fa-solid fa-magnifying-glass-location"></i>
+              </span>
+              <h2 class="text-sm font-bold text-ink">Find Parking Near You</h2>
+            </div>
+            <span class="text-[11px] font-semibold text-emeraldBadge-600 bg-emeraldBadge-50 px-2.5 py-0.5 rounded-full border border-emeraldBadge-100 flex items-center gap-1" id="currentH3HexBadge">
+              <i class="fa-solid fa-location-dot text-[9px]"></i> 100ft Rd • Live
+            </span>
+          </div>
+
+          <!-- Destination Bar with Quick Hub Presets -->
+          <div class="relative mb-2.5">
+            <i class="fa-solid fa-location-dot absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-500 text-xs"></i>
+            <input type="text" id="destinationQuery" value="100ft Road, Indiranagar"
+                   placeholder="Enter destination, landmark or area..."
+                   oninput="handleSearchFilterChange()"
+                   class="input-field pl-9 pr-8 text-xs font-medium">
+            <button onclick="resetDestinationQuery()" class="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink text-xs">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <!-- Quick Neighborhood Presets -->
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-2 text-[10px] text-ink-300">
+            <span class="font-semibold text-ink-400 text-[10px] flex-shrink-0">Popular:</span>
+            <button onclick="setCorridorAnchor('100ft', '100ft Road / Toit', 12.9788, 77.6408)" class="px-2.5 py-1 rounded-lg bg-surface-100 hover:bg-brand-50 hover:text-brand-600 font-medium whitespace-nowrap transition-colors border border-surface-200">
+              100ft Rd / Toit
+            </button>
+            <button onclick="setCorridorAnchor('metro', 'Indiranagar Metro', 12.9783, 77.6387)" class="px-2.5 py-1 rounded-lg bg-surface-100 hover:bg-brand-50 hover:text-brand-600 font-medium whitespace-nowrap transition-colors border border-surface-200">
+              Metro Pillar 84
+            </button>
+            <button onclick="setCorridorAnchor('hal', 'HAL 2nd Stage', 12.9719, 77.6415)" class="px-2.5 py-1 rounded-lg bg-surface-100 hover:bg-brand-50 hover:text-brand-600 font-medium whitespace-nowrap transition-colors border border-surface-200">
+              HAL 2nd Stage
+            </button>
+            <button onclick="setCorridorAnchor('defense', 'Defense Colony', 12.9690, 77.6450)" class="px-2.5 py-1 rounded-lg bg-surface-100 hover:bg-brand-50 hover:text-brand-600 font-medium whitespace-nowrap transition-colors border border-surface-200">
+              Defense Colony
+            </button>
+          </div>
+
+          <!-- Parameters: Radius, Duration & Vehicle Type -->
+          <div class="grid grid-cols-3 gap-2 mb-3.5 pt-1">
+            <div>
+              <label class="block text-[10px] font-semibold text-ink-300 mb-1">Max Distance</label>
+              <select id="filterMaxRadius" onchange="handleSearchFilterChange()"
+                      class="input-field text-xs cursor-pointer" style="padding: 7px 8px;">
+                <option value="500">Within 500m (Walk)</option>
+                <option value="1000" selected>Within 1 km</option>
+                <option value="2500">Within 2.5 km</option>
+                <option value="5000">Any Distance</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-semibold text-ink-300 mb-1">Duration Needed</label>
+              <select id="bookingDuration" onchange="handleDurationChange()"
+                      class="input-field text-xs cursor-pointer" style="padding: 7px 8px;">
+                <option value="1">1 Hour</option>
+                <option value="2" selected>2 Hours (Standard)</option>
+                <option value="4">4 Hours (Half Day)</option>
+                <option value="8">8 Hours (Full Day)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-semibold text-ink-300 mb-1">Vehicle Type</label>
+              <select id="driverVehicleType" onchange="handleSearchFilterChange()"
+                      class="input-field text-xs cursor-pointer" style="padding: 7px 8px;">
+                <option value="all">Any Car</option>
+                <option value="sedan">Hatchback / Sedan</option>
+                <option value="suv">SUV / MUV</option>
+                <option value="ev">EV Charger Required</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Friendly Category Filters -->
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+            <button onclick="setCategoryFilter('all', this)" class="category-chip px-3 py-1 rounded-lg font-semibold bg-brand-600 text-white shadow-sm transition-all whitespace-nowrap">
+              All Spaces
+            </button>
+            <button onclick="setCategoryFilter('ev', this)" class="category-chip px-3 py-1 rounded-lg font-semibold bg-surface-100 text-ink-200 hover:bg-surface-200 transition-all flex items-center gap-1 whitespace-nowrap">
+              <i class="fa-solid fa-bolt text-[9px] text-brand-500"></i> EV Charger
+            </button>
+            <button onclick="setCategoryFilter('open', this)" class="category-chip px-3 py-1 rounded-lg font-semibold bg-surface-100 text-ink-200 hover:bg-surface-200 transition-all flex items-center gap-1 whitespace-nowrap">
+              <i class="fa-solid fa-door-open text-[9px] text-brand-500"></i> Open Driveway
+            </button>
+            <button onclick="setCategoryFilter('guard', this)" class="category-chip px-3 py-1 rounded-lg font-semibold bg-surface-100 text-ink-200 hover:bg-surface-200 transition-all flex items-center gap-1 whitespace-nowrap">
+              <i class="fa-solid fa-shield-halved text-[9px] text-brand-500"></i> Gated Society
+            </button>
+            <button onclick="setCategoryFilter('barrier', this)" class="category-chip px-3 py-1 rounded-lg font-semibold bg-surface-100 text-ink-200 hover:bg-surface-200 transition-all flex items-center gap-1 whitespace-nowrap">
+              <i class="fa-solid fa-robot text-[9px] text-brand-500"></i> Smart Gate
+            </button>
+          </div>
+        </div>
+
+        <!-- Section Header with Count & Sort -->
+        <div class="flex items-center justify-between px-1">
+          <div class="flex items-center gap-2">
+            <h3 class="text-xs font-bold text-ink uppercase tracking-wider">Available Spaces Nearby</h3>
+            <span id="slotResultsCount" class="text-[11px] bg-brand-50 text-brand-600 border border-brand-100 font-bold px-2 py-0.5 rounded-full">
+              6 Verified Spots
+            </span>
+          </div>
+          <button onclick="toggleSortCriteria()" class="text-xs text-brand-600 font-semibold hover:text-brand-700 flex items-center gap-1 cursor-pointer">
+            <i class="fa-solid fa-arrow-down-short-wide text-[10px]"></i>
+            <span id="sortLabel">Sort: Shortest Walk</span>
+          </button>
+        </div>
+
+        <!-- Dynamic Slots Feed -->
+        <div id="slotsFeedContainer" class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+          <!-- Dynamically populated via SpatialService & renderSlots() -->
+        </div>
+      </div>
+
+      <!-- ================= HOST VIEW ================= -->
+      <div id="hostContainer" class="hidden space-y-4">
+
+        <!-- Host Sub-Tabs: List New Spot vs Managed Spots -->
+        <div class="flex items-center justify-between bg-surface-100 p-1 rounded-xl border border-surface-200 text-xs">
+          <button onclick="switchHostTab('form')" id="tabHostForm" class="flex-1 py-1.5 rounded-lg font-bold bg-white text-ink shadow-sm transition-all text-center">
+            <i class="fa-solid fa-circle-plus text-brand-500 mr-1"></i> Add Driveway
+          </button>
+          <button onclick="switchHostTab('manage')" id="tabHostManage" class="flex-1 py-1.5 rounded-lg font-medium text-ink-300 hover:text-ink transition-all text-center">
+            <i class="fa-solid fa-list-check mr-1"></i> My Bays (<span id="hostBayCount">1</span>)
+          </button>
+        </div>
+
+        <!-- Host Onboarding Form Card -->
+        <div id="hostFormCard" class="crystal-card p-5 anim-fadeUp">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-lg bg-emeraldBadge-50 text-emeraldBadge-600 flex items-center justify-center text-sm font-bold border border-emeraldBadge-100">
+                  <i class="fa-solid fa-house-chimney-window"></i>
+                </span>
+                <h2 class="text-base font-bold text-ink">Rent Out Your Driveway</h2>
+              </div>
+              <p class="text-xs text-ink-300 mt-1 ml-10">Earn steady income by sharing your free parking space with verified neighbors.</p>
+            </div>
+            <span class="text-[11px] bg-emeraldBadge-50 text-emeraldBadge-600 font-bold px-2.5 py-1 rounded-full border border-emeraldBadge-100 flex items-center gap-1">
+              <i class="fa-solid fa-shield-check text-[9px]"></i> Free to List
+            </span>
+          </div>
+
+          <form id="hostNewSlotForm" onsubmit="handleHostSlotSubmission(event)" class="space-y-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-ink-300 mb-1">Spot Name / Short Description</label>
+              <input type="text" id="inputHostTitle" required placeholder="e.g. Shaded Villa Driveway on 14th Main"
+                     class="input-field text-xs">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-semibold text-ink-300 mb-1">Your Hourly Rate (₹)</label>
+                <input type="number" id="inputHostRate" required min="20" max="250" value="45"
+                       oninput="updateSimulatorFromInput()"
+                       class="input-field text-xs font-mono font-bold">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-ink-300 mb-1">Gate / Entry Type</label>
+                <select id="inputHostAccess" class="input-field text-xs cursor-pointer" style="padding: 9px 10px;">
+                  <option value="Direct Driveway (Open)">Private Gate (Always Open)</option>
+                  <option value="Guarded Society (QR Pass)">Gated Society (Guard at Gate)</option>
+                  <option value="Smart Flap Barrier (IoT)">Automated Sensor Barrier</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-semibold text-ink-300 mb-1">Available From</label>
+                <input type="time" id="inputHostTimeFrom" value="08:30" class="input-field text-xs font-mono">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-ink-300 mb-1">Available Till</label>
+                <input type="time" id="inputHostTimeTill" value="19:30" class="input-field text-xs font-mono">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-ink-300 mb-1">Location Pin on Map (Click anywhere on map to reposition)</label>
+              <div class="flex items-center gap-2">
+                <input type="text" id="inputHostCoords" readonly value="12.9735° N, 77.6430° E"
+                       class="input-field text-xs font-mono text-ink-300 bg-surface-100 cursor-not-allowed">
+                <button type="button" onclick="placeHostPinAtCurrentCenter()" class="btn-neutral px-3 py-2 text-xs flex-shrink-0" title="Pin at current view center">
+                  <i class="fa-solid fa-location-crosshairs text-brand-600"></i> Set Center
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-ink-300 mb-1">Your UPI ID (Where earnings will be deposited)</label>
+              <input type="text" id="inputHostUpi" value="property.host@oksbi" required
+                     placeholder="e.g. yourname@okhdfcbank"
+                     class="input-field text-xs font-mono font-semibold">
+            </div>
+
+            <div class="flex items-center gap-2 pt-1">
+              <input type="checkbox" id="inputHostHasEv" class="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-surface-300">
+              <label for="inputHostHasEv" class="text-xs text-ink-200 font-medium">Equipped with 15A/7kW EV charging socket</label>
+            </div>
+
+            <button type="submit" class="btn-gradient w-full py-3 text-xs flex items-center justify-center gap-2 mt-2">
+              <i class="fa-solid fa-check"></i> Publish My Driveway
+            </button>
+          </form>
+        </div>
+
+        <!-- Managed Spots List (Host Dashboard) -->
+        <div id="hostManageCard" class="crystal-card p-5 anim-fadeUp hidden space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-ink">My Listed Parking Spaces</h3>
+            <span class="text-xs text-brand-600 font-semibold cursor-pointer" onclick="switchHostTab('form')">+ Add Another Bay</span>
+          </div>
+          <div id="hostMyBaysList" class="space-y-2.5">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Interactive Host Yield Calculator -->
+        <div class="crystal-card p-5 anim-fadeUp stagger-1">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <p class="text-[10px] text-ink-300 uppercase tracking-wider font-bold">Estimated Monthly Yield</p>
+              <h4 id="calcProjectedYield" class="text-2xl font-black text-brand-600 mt-0.5">₹8,100 <span class="text-xs text-ink-300 font-normal">/ slot</span></h4>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center text-lg border border-brand-100">
+              <i class="fa-solid fa-chart-pie"></i>
+            </div>
+          </div>
+
+          <div class="space-y-3 pt-2 text-xs border-t border-surface-200">
+            <div>
+              <div class="flex justify-between text-ink-300 mb-1">
+                <span>Occupancy Hours / Day</span>
+                <span id="sliderHoursDisplay" class="font-bold text-ink">6 Hours</span>
+              </div>
+              <input type="range" id="sliderHours" min="2" max="14" value="6" oninput="calculateHostYield()" class="w-full">
+            </div>
+            <div>
+              <div class="flex justify-between text-ink-300 mb-1">
+                <span>Hourly Rate</span>
+                <span id="sliderRateDisplay" class="font-bold text-ink">₹45 / hr</span>
+              </div>
+              <input type="range" id="sliderRate" min="25" max="150" value="45" oninput="calculateHostYield()" class="w-full">
+            </div>
+          </div>
+          <p class="text-[10px] text-ink-400 mt-2.5">Assuming 30 active days • Automated UPI direct settlement</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Interactive Map Grid -->
+    <section class="lg:col-span-7 flex flex-col gap-4 anim-fadeUp stagger-2">
+      <div class="crystal-card overflow-hidden flex-1 flex flex-col p-0" style="min-height: 540px;">
+
+        <!-- Map Head Meta -->
+        <div class="px-5 py-3 flex items-center justify-between border-b border-surface-200/80 bg-white/70">
+          <div class="flex items-center gap-2.5 text-xs">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" style="box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);"></span>
+            <span class="font-bold text-ink" id="mapStatusHeading">Neighborhood Parking Map</span>
+            <span class="text-ink-400 text-xs hidden sm:inline" id="mapCenterCoords">Indiranagar 100ft Road Corridor</span>
+          </div>
+          <div class="flex items-center gap-4 text-xs font-medium text-ink-300">
+            <span class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full" style="background: linear-gradient(135deg, #2563EB, #06B6D4);"></span>
+              Available
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-surface-300"></span>
+              Occupied
+            </span>
+            <button onclick="recenterMapToUser()" class="text-brand-600 font-bold hover:underline flex items-center gap-1">
+              <i class="fa-solid fa-crosshairs text-[10px]"></i> Recenter
+            </button>
+          </div>
+        </div>
+
+        <!-- Interactive Map Container -->
+        <div class="relative flex-1 w-full" style="min-height: 520px; height: 520px;">
+          <div id="map" style="width: 100%; height: 100%; min-height: 520px;"></div>
+
+          <!-- Walking Route Floating Tooltip -->
+          <div id="mapRoutePill" class="absolute top-4 left-4 z-20 crystal-card px-3 py-1.5 text-xs shadow-md hidden flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
+            <span id="mapRouteText" class="font-bold text-ink">Walking route displayed</span>
+            <button onclick="clearWalkingRoute()" class="text-ink-400 hover:text-ink text-xs ml-1">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <!-- Floating Overstay Protection Callout -->
+          <div class="absolute bottom-4 left-4 z-20 crystal-card p-3.5 max-w-[280px] text-xs shadow-lg hidden sm:block">
+            <div class="flex items-center justify-between text-brand-600 font-bold text-[11px] mb-1">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-shield-halved text-emeraldBadge-600"></i> Fair Play Guarantee</span>
+              <span class="text-[10px] bg-emeraldBadge-50 text-emeraldBadge-600 font-bold px-2 py-0.5 rounded-full border border-emeraldBadge-100">15m Grace</span>
+            </div>
+            <p class="text-[11px] text-ink-300 leading-relaxed">
+              Every booking includes 15 minutes of free grace time. Transparent overtime fees protect our hosts and community.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Academic Assessment & Status Footer -->
+  <footer class="relative z-10 max-w-7xl mx-auto px-4 lg:px-6 py-6 border-t border-surface-200/80 mt-8 mb-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-300">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-emeraldBadge-500 animate-pulse"></span>
+      <span class="font-semibold text-ink-100">SpotShare IA Prototype</span>
+      <span>• Civil & Transportation Engineering Assessment</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="text-ink-400"><i class="fa-solid fa-database text-[10px] text-brand-500"></i> Local Browser DB: Active</span>
+      <button onclick="resetDemoData()" class="text-brand-600 hover:text-brand-700 font-semibold hover:underline flex items-center gap-1.5 transition-colors">
+        <i class="fa-solid fa-rotate-left text-[10px]"></i> Reset Demo Data
+      </button>
+    </div>
+  </footer>
+
+  <!-- ================= MODAL: 5-MIN LOCK & UPI CHECKOUT ================= -->
+  <div id="checkoutModal" class="modal-scrim" onclick="if(event.target===this)closeCheckoutModal()">
+    <div class="modal-window">
+      <!-- Top Electric Cyan-Blue Accent Line -->
+      <div class="h-1" style="background: linear-gradient(90deg, #2563EB, #06B6D4, #2563EB);"></div>
+
+      <div class="p-6 space-y-5">
+        <!-- Header -->
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amberAccent-50 text-amberAccent-600 border border-amberAccent-100 mb-2">
+              <i class="fa-solid fa-clock text-amber-500"></i> Spot held for you: <span id="checkoutLockCountdown" class="font-mono font-bold text-brand-600">05:00</span>
+            </div>
+            <h3 id="checkoutSlotTitle" class="text-base font-bold text-ink">Villa Driveway #12</h3>
+            <p id="checkoutSlotAddress" class="text-xs text-ink-300 mt-0.5">12th Main, HAL 2nd Stage</p>
+          </div>
+          <button onclick="closeCheckoutModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-ink-300 hover:text-ink hover:bg-surface-100 transition-colors">
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+
+        <!-- Duration adjustment inside Checkout -->
+        <div class="flex items-center justify-between text-xs bg-surface-100 p-2.5 rounded-xl border border-surface-200">
+          <span class="text-ink-300 font-medium">Duration:</span>
+          <div class="flex items-center gap-2">
+            <button onclick="adjustModalDuration(-1)" class="w-7 h-7 rounded-lg bg-white border border-surface-200 text-ink font-bold flex items-center justify-center hover:bg-surface-50">-</button>
+            <span id="modalDurationDisplay" class="font-bold text-ink px-1">2 Hours</span>
+            <button onclick="adjustModalDuration(1)" class="w-7 h-7 rounded-lg bg-white border border-surface-200 text-ink font-bold flex items-center justify-center hover:bg-surface-50">+</button>
+          </div>
+        </div>
+
+        <!-- Breakdown Details -->
+        <div class="rounded-xl p-4 space-y-2 bg-surface-100/70 border border-surface-200 text-xs">
+          <div class="flex justify-between text-ink-300">
+            <span>Base Parking Fee</span>
+            <span id="checkoutBaseAmount" class="text-ink font-semibold">₹80 (₹40 × 2 hrs)</span>
+          </div>
+          <div class="flex justify-between text-ink-300">
+            <span>Grace Period</span>
+            <span class="text-emeraldBadge-600 font-semibold">15 mins free buffer</span>
+          </div>
+          <div class="flex justify-between text-ink-300">
+            <span>Entry Type</span>
+            <span id="checkoutAccessLabel" class="text-brand-600 font-semibold">Direct Driveway (Open)</span>
+          </div>
+          <div class="border-t border-surface-200 pt-2.5 mt-1 flex justify-between items-center text-sm font-bold">
+            <span class="text-ink">Total to Pay (UPI)</span>
+            <span id="checkoutTotalAmount" class="text-lg text-brand-600 font-black">₹80</span>
+          </div>
+        </div>
+
+        <!-- Vehicle Details -->
+        <div class="space-y-1.5">
+          <label class="block text-[11px] font-semibold text-ink-300">Vehicle Registration Number</label>
+          <input type="text" id="checkoutVehiclePlate" value="KA-03-MD-4421"
+                 placeholder="e.g. KA-03-MG-9921"
+                 class="input-field text-xs font-mono font-bold uppercase tracking-wider">
+        </div>
+
+        <!-- Actions -->
+        <div class="grid grid-cols-5 gap-3 pt-1">
+          <button onclick="closeCheckoutModal()" class="btn-neutral col-span-2 py-2.5 text-xs font-semibold">
+            Cancel
+          </button>
+          <button onclick="openPaymentModal()" class="btn-gradient col-span-3 py-2.5 text-xs font-semibold flex items-center justify-center gap-2">
+            <span>Proceed to Pay</span>
+            <span id="checkoutBtnAmount" class="font-bold">₹80</span>
+            <i class="fa-solid fa-arrow-right text-[10px]"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: DIGITAL PARKING PASS & LIVE CONTROL ================= -->
+  <div id="parkingPassModal" class="modal-scrim" onclick="if(event.target===this)closeParkingPassModal()">
+    <div class="modal-window">
+      <div class="p-6 text-center space-y-4">
+
+        <!-- Confirmed Success Ring Icon -->
+        <div class="relative w-14 h-14 mx-auto">
+          <div class="w-14 h-14 rounded-full flex items-center justify-center bg-emeraldBadge-50 border border-emeraldBadge-100 text-emeraldBadge-600">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M5 13l4 4L19 7" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                    style="stroke-dasharray: 40; animation: checkDraw 0.6s ease both;"/>
+            </svg>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-center gap-1.5 text-xs text-emeraldBadge-600 font-bold mb-0.5">
+            <span class="w-2 h-2 rounded-full bg-emeraldBadge-500 animate-ping"></span> Active Parking Session
+          </div>
+          <h3 class="text-base font-bold text-ink" id="passModalSlotTitle">Villa Driveway</h3>
+          <p class="text-xs text-ink-300 mt-0.5" id="passAccessInstruction">Show this QR pass at the entrance gate or to security</p>
+        </div>
+
+        <!-- Digital Entry Pass QR -->
+        <div class="bg-white p-4 rounded-2xl max-w-[170px] mx-auto border border-surface-200 shadow-sm relative group">
+          <canvas id="qrGateCanvas" width="140" height="140"></canvas>
+          <div class="text-[10px] text-brand-600 font-bold tracking-wider mt-1.5 uppercase">DIGITAL ENTRY PASS</div>
+        </div>
+
+        <!-- Live Countdown & Meta Breakdown -->
+        <div class="rounded-xl p-4 text-left space-y-2 font-mono text-xs bg-surface-100/70 border border-surface-200">
+          <div class="flex justify-between items-center">
+            <span class="text-ink-300">Time Remaining</span>
+            <span id="passLiveCountdown" class="text-brand-600 font-bold font-mono">01h 59m 50s</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-ink-300">Pass Code</span>
+            <div class="flex items-center gap-1.5">
+              <span id="passMetaCode" class="text-ink font-bold">#SPT-9842</span>
+              <button onclick="copyPassCodeToClipboard()" class="text-brand-600 hover:text-brand-700 text-[11px]" title="Copy Pass ID">
+                <i class="fa-regular fa-copy"></i>
+              </button>
+            </div>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-ink-300">Vehicle Plate</span>
+            <span id="passMetaPlate" class="text-ink font-bold">KA-03-MD-4421</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-ink-300">Valid Until</span>
+            <span id="passMetaExpiry" class="text-emeraldBadge-600 font-bold">--:--</span>
+          </div>
+        </div>
+
+        <!-- Auto-Clear Status & Fast Forward Demo -->
+        <div class="bg-blue-50/70 p-2.5 rounded-xl border border-blue-100 text-left flex items-center justify-between text-xs">
+          <div class="flex items-center gap-1.5 text-brand-700 font-semibold text-[11px]">
+            <i class="fa-solid fa-arrows-rotate text-brand-500"></i> Auto-reopens bay when time expires
+          </div>
+          <button type="button" onclick="fastForwardSessionToExpiry()" class="text-[10px] font-bold text-brand-600 bg-white hover:bg-brand-50 border border-brand-200 px-2 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-xs" title="Fast-forward timer to 5s remaining to witness auto-clear">
+            <i class="fa-solid fa-forward-step"></i> Fast-Forward (5s)
+          </button>
+        </div>
+
+        <!-- Live Gate & Session Controls -->
+        <div class="bg-surface-50 p-2.5 rounded-xl border border-surface-200 text-left space-y-2">
+          <span class="text-[10px] font-bold text-ink-400 uppercase tracking-wider block">Gate & Session Controls:</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="simulateBarrierUnlock()" class="btn-neutral py-2 text-[11px] flex items-center justify-center gap-1">
+              <i class="fa-solid fa-door-open text-brand-600"></i> Open Gate Barrier
+            </button>
+            <button onclick="simulateOverstayTrigger()" class="btn-neutral py-2 text-[11px] flex items-center justify-center gap-1 text-amberAccent-600">
+              <i class="fa-solid fa-clock-rotate-left text-amberAccent-500"></i> Test Overtime Alert
+            </button>
+          </div>
+        </div>
+
+        <!-- Spot Condition & Refund Option -->
+        <div class="pt-0.5">
+          <button onclick="openReportIssueModal()" class="w-full py-2 px-2.5 rounded-xl border border-rose-200 bg-rose-50/80 hover:bg-rose-100 text-rose-600 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors">
+            <i class="fa-solid fa-camera text-[10px]"></i> Report Spot Condition & 100% Refund
+          </button>
+        </div>
+
+        <!-- Modal Footer Actions: Check-Out vs Keep Active -->
+        <div class="grid grid-cols-2 gap-2.5 pt-1 border-t border-surface-200/80">
+          <button onclick="handleCheckOutAndReleaseSlot()" class="py-2.5 rounded-xl bg-roseBadge-50 hover:bg-roseBadge-100 text-roseBadge-600 border border-roseBadge-100 text-xs font-bold transition-all flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-right-from-bracket"></i> Complete & Exit
+          </button>
+          <button onclick="closeParkingPassModal()" class="btn-gradient py-2.5 text-xs font-semibold">
+            Done (View Pass Later)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: PAYMENT GATEWAY & TRIGGER ================= -->
+  <div id="paymentProcessingModal" class="modal-scrim" onclick="if(event.target===this)closePaymentProcessingModal()">
+    <div class="modal-window max-w-[420px]">
+      <div class="h-1 bg-gradient-to-r from-emerald-500 via-cyan-500 to-brand-600"></div>
+
+      <div class="p-6 space-y-4">
+        <!-- Header -->
+        <div class="flex items-start justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 border border-brand-100 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-credit-card"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-ink">UPI Payment</h3>
+              <p class="text-xs text-ink-300">SpotShare Instant Checkout</p>
+            </div>
+          </div>
+          <button onclick="closePaymentProcessingModal()" class="text-ink-300 hover:text-ink text-sm">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Amount Hero -->
+        <div class="bg-gradient-to-b from-surface-100/80 to-surface-50 p-4 rounded-2xl border border-surface-200 text-center">
+          <span class="text-xs text-ink-300 font-medium block">Total Payable</span>
+          <span id="paymentModalAmount" class="text-3xl font-black text-ink block my-1">₹80</span>
+          <div class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emeraldBadge-600 bg-emeraldBadge-50 px-2.5 py-0.5 rounded-full border border-emeraldBadge-100">
+            <i class="fa-solid fa-shield-check text-[10px]"></i> Zero Convenience Fee
+          </div>
+        </div>
+
+        <!-- Summary list -->
+        <div class="rounded-xl p-3.5 bg-surface-100/70 border border-surface-200 text-xs space-y-1.5">
+          <div class="flex justify-between text-ink-300">
+            <span>Parking Bay</span>
+            <span id="paymentModalSlotTitle" class="font-bold text-ink truncate max-w-[200px]">12th Main Villa Driveway</span>
+          </div>
+          <div class="flex justify-between text-ink-300">
+            <span>Duration & Vehicle</span>
+            <span id="paymentModalDurationPlate" class="font-semibold text-ink">2 Hours • KA-03-MD-4421</span>
+          </div>
+          <div class="flex justify-between text-ink-300">
+            <span>UPI ID / Merchant</span>
+            <span class="font-mono text-[11px] text-ink-400">spotshare.mobility@icici</span>
+          </div>
+        </div>
+
+        <!-- Supported UPI Apps -->
+        <div class="flex items-center justify-around py-1 text-ink-300 text-xs border-y border-surface-200/70">
+          <span class="flex items-center gap-1 text-[11px] font-medium"><i class="fa-brands fa-google-pay text-lg text-ink"></i> GPay</span>
+          <span class="flex items-center gap-1 text-[11px] font-medium text-purple-600 font-bold"><i class="fa-solid fa-mobile-screen"></i> PhonePe</span>
+          <span class="flex items-center gap-1 text-[11px] font-medium text-cyan-600 font-bold"><i class="fa-solid fa-wallet"></i> Paytm</span>
+          <span class="flex items-center gap-1 text-[11px] font-medium text-orange-600 font-bold">BHIM</span>
+        </div>
+
+        <!-- Prototype Payment Success Trigger Button -->
+        <div class="space-y-2 pt-1">
+          <button type="button" onclick="triggerPaymentSuccess()"
+                  class="btn-gradient w-full py-3.5 text-xs font-bold flex items-center justify-center gap-2 shadow-md">
+            <i class="fa-solid fa-circle-check text-sm text-white"></i>
+            <span>Simulate Payment Done (Approve ₹<span id="paymentBtnVal">80</span>)</span>
+          </button>
+          <p class="text-[10px] text-ink-400 text-center">
+            <i class="fa-solid fa-wand-magic-sparkles text-brand-500 mr-1"></i> Temporary button: Click to simulate instant payment & view booking details.
+          </p>
+        </div>
+
+        <button onclick="closePaymentProcessingModal()" class="btn-neutral w-full py-2 text-xs font-medium">
+          Back to Reservation Details
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: PAYMENT DONE & BOOKING DETAILS PAGE ================= -->
+  <div id="paymentDoneModal" class="modal-scrim" onclick="if(event.target===this)closePaymentDoneModal()">
+    <div class="modal-window max-w-[460px]">
+      <div class="h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-brand-600"></div>
+
+      <div class="p-6 space-y-4">
+        <!-- Success Animation & Badge -->
+        <div class="text-center space-y-1.5">
+          <div class="w-14 h-14 rounded-full bg-emeraldBadge-50 border-2 border-emeraldBadge-200 text-emeraldBadge-600 flex items-center justify-center mx-auto shadow-sm">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+              <path d="M5 13l4 4L19 7" stroke="#059669" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                    style="stroke-dasharray: 40; animation: checkDraw 0.5s ease both;"/>
+            </svg>
+          </div>
+          <h3 class="text-lg font-black text-ink tracking-tight">Payment Done!</h3>
+          <p class="text-xs text-emeraldBadge-600 font-bold flex items-center justify-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emeraldBadge-500 animate-ping"></span>
+            <span>₹<span id="donePaidAmount">80</span> Received & Confirmed</span>
+          </p>
+        </div>
+
+        <!-- Transaction Reference Card -->
+        <div class="bg-surface-100/70 p-3 rounded-xl border border-surface-200 flex items-center justify-between text-xs">
+          <div>
+            <span class="text-[10px] text-ink-300 uppercase tracking-wider block font-semibold">Transaction Reference</span>
+            <span id="doneTxnRef" class="font-mono font-bold text-ink text-xs">TXN-UPI-98421098</span>
+          </div>
+          <span class="text-[10px] bg-emeraldBadge-50 text-emeraldBadge-700 font-bold px-2 py-0.5 rounded-full border border-emeraldBadge-200">
+            Paid via UPI
+          </span>
+        </div>
+
+        <!-- Full Booking Details Display (displayed AFTER payment is done) -->
+        <div class="rounded-2xl p-4 bg-white border border-surface-200 shadow-xs space-y-3 text-xs">
+          <div class="flex items-start justify-between border-b border-surface-200/70 pb-3">
+            <div>
+              <span class="text-[10px] font-bold text-brand-600 uppercase tracking-wider block">Parking Space Reserved</span>
+              <h4 id="doneSlotTitle" class="text-sm font-bold text-ink mt-0.5">12th Main Villa Driveway</h4>
+              <p id="doneSlotAddress" class="text-xs text-ink-300 mt-0.5">12th Main, HAL 2nd Stage, Indiranagar</p>
+            </div>
+            <span id="donePassCodeBadge" class="font-mono text-xs font-black bg-brand-50 text-brand-700 border border-brand-200 px-2 py-1 rounded-lg">
+              #SPT-LIVE
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-ink-300">
+            <div>
+              <span class="text-[10px] block font-semibold">Vehicle Number</span>
+              <span id="doneVehiclePlate" class="text-xs font-mono font-bold text-ink">KA-03-MD-4421</span>
+            </div>
+            <div>
+              <span class="text-[10px] block font-semibold">Reserved Duration</span>
+              <span id="doneDurationTime" class="text-xs font-bold text-ink">2 Hours</span>
+            </div>
+            <div>
+              <span class="text-[10px] block font-semibold">Valid Till</span>
+              <span id="doneValidTill" class="text-xs font-bold text-emeraldBadge-600">--:--</span>
+            </div>
+            <div>
+              <span class="text-[10px] block font-semibold">Access Modality</span>
+              <span id="doneAccessType" class="text-xs font-semibold text-ink">Direct Gate (Open)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="space-y-2 pt-1">
+          <button onclick="openPassFromPaymentDone()" class="btn-gradient w-full py-3 text-xs font-bold flex items-center justify-center gap-2 shadow-sm">
+            <i class="fa-solid fa-qrcode text-sm"></i> View Digital Entry Pass & QR
+          </button>
+          <button onclick="closePaymentDoneModal()" class="btn-neutral w-full py-2.5 text-xs font-semibold">
+            Done (Return to Map)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: REMOVE HOST BAY CONFIRMATION ================= -->
+  <div id="deleteBayModal" class="modal-scrim" onclick="if(event.target===this)closeDeleteBayModal()">
+    <div class="modal-window max-w-[400px]">
+      <div class="p-6 space-y-4">
+        <div class="flex items-start justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-xl bg-roseBadge-50 text-roseBadge-600 border border-roseBadge-100 flex items-center justify-center text-base">
+              <i class="fa-regular fa-trash-can"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-ink">Remove Parking Bay</h3>
+              <p class="text-xs text-ink-300">Unlist space from SpotShare</p>
+            </div>
+          </div>
+          <button onclick="closeDeleteBayModal()" class="text-ink-300 hover:text-ink text-sm">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="p-3.5 bg-surface-100/70 border border-surface-200 rounded-xl text-xs space-y-1">
+          <span class="text-[10px] text-ink-300 uppercase tracking-wider block font-semibold">Bay to be removed:</span>
+          <h4 id="deleteBayTitle" class="font-bold text-ink text-sm">12th Main Villa Driveway</h4>
+          <p id="deleteBayAddress" class="text-[11px] text-ink-400">12th Main, HAL 2nd Stage, Indiranagar</p>
+        </div>
+
+        <p class="text-xs text-ink-300 leading-relaxed">
+          Are you sure you want to remove this space? Neighbors will no longer be able to find or book this driveway on the map.
+        </p>
+
+        <div class="grid grid-cols-2 gap-2.5 pt-1">
+          <button onclick="closeDeleteBayModal()" class="btn-neutral py-2.5 text-xs font-semibold">
+            Keep Bay
+          </button>
+          <button onclick="confirmExecuteDeleteBay()" class="py-2.5 rounded-xl bg-roseBadge-600 hover:bg-roseBadge-700 text-white font-bold text-xs transition-all shadow-sm flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-trash-can text-xs"></i> Yes, Remove Bay
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: REPORT UNMAINTAINED SPOT & 100% REFUND ================= -->
+  <div id="reportIssueModal" class="modal-scrim" onclick="if(event.target===this)closeReportIssueModal()">
+    <div class="modal-window">
+      <div class="p-6 space-y-4">
+        <div class="flex items-start justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-xl bg-roseBadge-50 text-roseBadge-600 border border-roseBadge-100 flex items-center justify-center text-base">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-ink">Report Issue & Full Refund</h3>
+              <p class="text-xs text-ink-300" id="reportModalSlotTitle">Villa Driveway #12</p>
+            </div>
+          </div>
+          <button onclick="closeReportIssueModal()" class="text-ink-300 hover:text-ink text-sm">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="bg-emeraldBadge-50 p-3 rounded-xl border border-emeraldBadge-100 text-xs flex items-start gap-2.5">
+          <i class="fa-solid fa-circle-check text-emeraldBadge-600 text-sm mt-0.5"></i>
+          <div>
+            <div class="font-bold text-emeraldBadge-700">100% Quality & Access Guarantee</div>
+            <div class="text-[11px] text-emeraldBadge-600 leading-snug mt-0.5">
+              If the driveway is blocked, unmaintained (trash, debris, flooding), or inaccessible, attach a photo below for an instant 100% full refund with zero fees.
+            </div>
+          </div>
+        </div>
+
+        <!-- Issue Category Selection -->
+        <div class="space-y-1">
+          <label class="block text-[11px] font-semibold text-ink-300">Reason for Cancellation</label>
+          <select id="reportIssueReason" class="input-field text-xs cursor-pointer">
+            <option value="unmaintained">Space not maintained (debris, trash, flooding, damaged surface)</option>
+            <option value="blocked">Driveway blocked by vehicle, gate locked, or inaccessible</option>
+            <option value="no_guard">Gate security guard refused entry / access denied</option>
+            <option value="misleading">Wrong location, unsafe dimensions, or misleading listing</option>
+          </select>
+        </div>
+
+        <!-- Photo Verification Upload Area -->
+        <div class="space-y-1.5">
+          <label class="block text-[11px] font-semibold text-ink-300">Upload Condition Photo (Required for 100% refund)</label>
+          
+          <div id="dropZoneArea" class="border-2 border-dashed border-surface-300 hover:border-brand-500 rounded-xl p-4 text-center cursor-pointer transition-colors bg-surface-50/50" onclick="document.getElementById('issuePhotoInput').click()">
+            <input type="file" id="issuePhotoInput" accept="image/*" class="hidden" onchange="handleIssuePhotoSelect(event)">
+            
+            <div id="uploadPromptContainer">
+              <div class="w-9 h-9 mx-auto rounded-lg bg-surface-200/70 flex items-center justify-center text-ink-300 mb-1.5">
+                <i class="fa-solid fa-camera text-sm"></i>
+              </div>
+              <p class="text-xs font-semibold text-ink">Click to upload photo from camera or files</p>
+              <p class="text-[10px] text-ink-400 mt-0.5">Supports PNG, JPG, JPEG • Instant AI verification</p>
+            </div>
+
+            <!-- Preview Container -->
+            <div id="uploadPreviewContainer" class="hidden space-y-2">
+              <img id="issuePhotoPreview" class="max-h-36 mx-auto rounded-lg object-cover shadow-sm border border-surface-200">
+              <div class="flex items-center justify-center gap-1.5 text-xs text-emeraldBadge-600 font-bold">
+                <i class="fa-solid fa-circle-check"></i> Photo Attached & Verified
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick 1-Click Sample Photo for Prototype Testing -->
+          <div class="flex items-center justify-between pt-1">
+            <span class="text-[10px] text-ink-400">Testing prototype?</span>
+            <button type="button" onclick="loadSampleProofPhoto()" class="text-[11px] text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1">
+              <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i> Use Sample Photo (Blocked Gate)
+            </button>
+          </div>
+        </div>
+
+        <!-- Refund Total Display -->
+        <div class="bg-surface-100 p-3 rounded-xl border border-surface-200 text-xs flex items-center justify-between">
+          <div>
+            <span class="text-ink-300 block text-[10px]">Guaranteed Refund to UPI</span>
+            <span class="font-black text-sm text-brand-600" id="reportRefundTotal">₹80 (100% Full Refund)</span>
+          </div>
+          <span class="text-[10px] bg-emeraldBadge-50 text-emeraldBadge-600 border border-emeraldBadge-100 px-2.5 py-1 rounded-full font-bold">
+            Zero Deductions
+          </span>
+        </div>
+
+        <!-- Actions -->
+        <div class="grid grid-cols-2 gap-2.5 pt-1">
+          <button onclick="closeReportIssueModal()" class="btn-neutral py-2.5 text-xs font-semibold">
+            Cancel
+          </button>
+          <button onclick="submitIssueReportAndRefund()" id="btnSubmitIssueRefund" class="btn-gradient py-2.5 text-xs font-bold flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-hand-holding-dollar text-xs"></i> Submit & Refund
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ARCHITECTURAL LOGIC & IMPLEMENTATION SCRIPT ================= -->
+  <script>
+    /**
+     * MODULE A: SPATIAL INDEXING & DISTANCE CALCULATION
+     * Implements Haversine distance, walking velocity estimation, and Uber H3 Res-9 resolution mock.
+     */
+    class SpatialService {
+      static haversineDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371e3; // Earth radius in meters
+        const phi1 = lat1 * Math.PI / 180;
+        const phi2 = lat2 * Math.PI / 180;
+        const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+        const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                  Math.cos(phi1) * Math.cos(phi2) *
+                  Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return Math.round(R * c);
+      }
+
+      static getWalkingMinutes(distanceMeters) {
+        // Average human pedestrian velocity ~80 meters per minute
+        return Math.max(1, Math.round(distanceMeters / 80));
+      }
+
+      static computeH3Hex(lat, lng) {
+        const base = 0x896189250000000n;
+        const latOffset = BigInt(Math.floor(Math.abs(lat * 10000)));
+        const lngOffset = BigInt(Math.floor(Math.abs(lng * 10000)));
+        return (base + (latOffset << 16n) + lngOffset).toString(16).slice(0, 15);
+      }
+
+      static filterAvailableSlots(slots, userLat, userLng, filterCriteria = {}) {
+        const { maxRadiusMeters = 2000, category = 'all', vehicleClass = 'all', query = '' } = filterCriteria;
+
+        return slots
+          .map(slot => {
+            const distanceMeters = this.haversineDistance(userLat, userLng, slot.lat, slot.lng);
+            const walkingMinutes = this.getWalkingMinutes(distanceMeters);
+            const h3Hex = slot.h3Hex || this.computeH3Hex(slot.lat, slot.lng);
+            return {
+              ...slot,
+              distanceMeters,
+              walkingMinutes,
+              h3Hex
+            };
+          })
+          .filter(slot => {
+            // Radius filter
+            const withinRadius = slot.distanceMeters <= maxRadiusMeters;
+
+            // Category filter
+            let matchesCategory = true;
+            if (category === 'ev') matchesCategory = !!slot.ev;
+            else if (category === 'open') matchesCategory = slot.access.toLowerCase().includes('open') || slot.access.toLowerCase().includes('direct');
+            else if (category === 'guard') matchesCategory = slot.access.toLowerCase().includes('guard') || slot.access.toLowerCase().includes('society');
+            else if (category === 'barrier') matchesCategory = slot.access.toLowerCase().includes('barrier') || slot.access.toLowerCase().includes('flap') || slot.access.toLowerCase().includes('iot');
+
+            // Vehicle class filter
+            let matchesVehicle = true;
+            if (vehicleClass === 'ev') matchesVehicle = !!slot.ev;
+            else if (vehicleClass === 'suv' && slot.vehicleRestriction === 'hatchback_only') matchesVehicle = false;
+
+            // Search query text filter
+            let matchesQuery = true;
+            if (query && query.trim()) {
+              const q = query.toLowerCase();
+              matchesQuery = slot.title.toLowerCase().includes(q) || slot.address.toLowerCase().includes(q) || slot.host.toLowerCase().includes(q);
+            }
+
+            return withinRadius && matchesCategory && matchesVehicle && matchesQuery;
+          });
+      }
+    }
+
+    /**
+     * MODULE B: DISTRIBUTED RESERVATION & LOCK ENGINE
+     * Implements concurrency-safe advisory lock acquisition (5-minute TTL) and reservation finalization.
+     */
+    class MemoryLockStorage {
+      constructor() {
+        this.locks = new Map();
+        this.bookings = new Map();
+      }
+
+      async setNX(key, owner, ttlSeconds) {
+        const now = Date.now();
+        const existing = this.locks.get(key);
+        if (existing && existing.expiresAt > now) {
+          return false; // Lock collision prevented
+        }
+        this.locks.set(key, { owner, expiresAt: now + ttlSeconds * 1000 });
+        return true;
+      }
+
+      async releaseLock(key, owner) {
+        const lock = this.locks.get(key);
+        if (lock && lock.owner === owner) {
+          this.locks.delete(key);
+          return true;
+        }
+        return false;
+      }
+
+      async saveBooking(reservation) {
+        this.bookings.set(reservation.id, reservation);
+        return reservation;
+      }
+
+      getBooking(id) {
+        return this.bookings.get(id);
+      }
+    }
+
+    class ReservationEngine {
+      constructor(storageAdapter) {
+        this.storage = storageAdapter;
+      }
+
+      async acquireSlotLock(slotId, driverId, ttlSeconds = 300) {
+        const lockKey = `lock:slot:${slotId}`;
+        const acquired = await this.storage.setNX(lockKey, driverId, ttlSeconds);
+        if (!acquired) {
+          throw new Error("This spot is currently being reserved by another driver. Please pick another spot nearby or try again in a few minutes.");
+        }
+        return { lockKey, expiresAt: Date.now() + (ttlSeconds * 1000) };
+      }
+
+      async releaseSlotLock(slotId, driverId) {
+        const lockKey = `lock:slot:${slotId}`;
+        return await this.storage.releaseLock(lockKey, driverId);
+      }
+
+      async finalizeReservation(slotId, driverDetails, durationHours, ratePerHour) {
+        const baseTotal = durationHours * ratePerHour;
+        const passCode = `SPT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const now = new Date();
+        const endTime = new Date(now.getTime() + durationHours * 3600000);
+
+        const reservation = {
+          id: passCode,
+          slotId,
+          driverPlate: driverDetails.plate,
+          startTime: now.toISOString(),
+          endTime: endTime.toISOString(),
+          totalAmount: baseTotal,
+          durationHours: durationHours,
+          ratePerHour: ratePerHour,
+          status: 'active'
+        };
+
+        await this.storage.saveBooking(reservation);
+        return reservation;
+      }
+
+      calculateOverstaySurge(ratePerHour, scheduledEndTime, actualEndTime = new Date()) {
+        const diffMs = actualEndTime.getTime() - new Date(scheduledEndTime).getTime();
+        const diffMinutes = Math.floor(diffMs / 60000);
+
+        const graceMinutes = 15;
+        if (diffMinutes <= graceMinutes) {
+          return { overstayMinutes: Math.max(0, diffMinutes), billableMinutes: 0, surgeAmount: 0, isSurge: false };
+        }
+
+        const billableMinutes = diffMinutes - graceMinutes;
+        const quarters = Math.ceil(billableMinutes / 15);
+        let surcharge = 0;
+        for (let i = 0; i < quarters; i++) {
+          surcharge += (ratePerHour / 4) * Math.pow(1.5, i);
+        }
+
+        return {
+          overstayMinutes: diffMinutes,
+          billableMinutes: billableMinutes,
+          surgeAmount: Math.round(surcharge),
+          isSurge: true
+        };
+      }
+    }
+
+    // ================= CLIENT-SIDE LOCAL DATABASE & DEFAULTS =================
+    const DEFAULT_IND_SLOTS = [
+      {
+        id: 1,
+        title: "12th Main Villa Driveway",
+        address: "12th Main, HAL 2nd Stage, Indiranagar",
+        lat: 12.9719,
+        lng: 77.6415,
+        rate: 40,
+        access: "Direct Driveway (Open)",
+        host: "Vikram S.",
+        hostRating: 4.9,
+        status: "available",
+        ev: true,
+        h3Hex: "89618925d1bffff"
+      },
+      {
+        id: 2,
+        title: "Symphony Apt Covered Bay #4",
+        address: "Near Metro Pillar 84, Indiranagar",
+        lat: 12.9745,
+        lng: 77.6438,
+        rate: 50,
+        access: "Guarded Society (QR Pass)",
+        host: "Pooja M.",
+        hostRating: 4.8,
+        status: "available",
+        ev: false,
+        h3Hex: "89618925d03ffff"
+      },
+      {
+        id: 3,
+        title: "Shanthi Niwas Open Bay",
+        address: "Opp. Toit Brewpub, Indiranagar",
+        lat: 12.9788,
+        lng: 77.6408,
+        rate: 60,
+        access: "Direct Driveway (Open)",
+        host: "Arun K.",
+        hostRating: 4.9,
+        status: "available",
+        ev: true,
+        h3Hex: "89618925d37ffff"
+      },
+      {
+        id: 4,
+        title: "Paramount Terraces B2",
+        address: "100ft Rd, Defense Colony",
+        lat: 12.9690,
+        lng: 77.6450,
+        rate: 35,
+        access: "Smart Flap Barrier (IoT)",
+        host: "Ritu N.",
+        hostRating: 4.6,
+        status: "occupied",
+        ev: false,
+        h3Hex: "89618925d4fffff"
+      },
+      {
+        id: 5,
+        title: "Clinic Greens Private Bay",
+        address: "Behind SBI Branch, Indiranagar",
+        lat: 12.9755,
+        lng: 77.6395,
+        rate: 45,
+        access: "Direct Driveway (Open)",
+        host: "Dr. Sharma",
+        hostRating: 4.7,
+        status: "available",
+        ev: false,
+        h3Hex: "89618925d53ffff"
+      },
+      {
+        id: 6,
+        title: "St. Joseph's Weekend Bay",
+        address: "Old Airport Road Anchor",
+        lat: 12.9680,
+        lng: 77.6390,
+        rate: 30,
+        access: "Smart Flap Barrier (IoT)",
+        host: "School Bay",
+        hostRating: 4.5,
+        status: "available",
+        ev: true,
+        h3Hex: "89618925d2bffff"
+      }
+    ];
+
+    const SpotShareStorage = {
+      DB_KEY: 'spotshare_local_db_v1',
+      RESERVATION_KEY: 'spotshare_active_res_v1',
+
+      saveSlots(slots) {
+        try {
+          localStorage.setItem(this.DB_KEY, JSON.stringify(slots));
+        } catch(e) {
+          console.warn("Local storage write error:", e);
+        }
+      },
+
+      loadSlots(defaultSlots) {
+        try {
+          const raw = localStorage.getItem(this.DB_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        } catch(e) {
+          console.warn("Local storage read error:", e);
+        }
+        return JSON.parse(JSON.stringify(defaultSlots));
+      },
+
+      saveReservation(res) {
+        try {
+          if (!res) localStorage.removeItem(this.RESERVATION_KEY);
+          else localStorage.setItem(this.RESERVATION_KEY, JSON.stringify(res));
+        } catch(e) {}
+      },
+
+      loadReservation() {
+        try {
+          const raw = localStorage.getItem(this.RESERVATION_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch(e) {}
+        return null;
+      },
+
+      resetDatabase(defaultSlots) {
+        try {
+          localStorage.removeItem(this.DB_KEY);
+          localStorage.removeItem(this.RESERVATION_KEY);
+        } catch(e) {}
+        return JSON.parse(JSON.stringify(defaultSlots));
+      }
+    };
+
+    // ================= GLOBAL APPLICATION STATE =================
+    const appState = {
+      userRole: 'driver',
+      userLocation: { lat: 12.9719, lng: 77.6415, name: "Indiranagar (100ft Rd)" },
+      selectedSlot: null,
+      activeReservation: SpotShareStorage.loadReservation(),
+      lockTimerInterval: null,
+      passCountdownInterval: null,
+      activeCategoryFilter: 'all',
+      sortCriteria: 'distance',
+      walkingPolyline: null,
+      autoReleaseOnExpiry: true,
+      uploadedIssuePhoto: null,
+      pendingDeleteSlotId: null,
+      hostPendingCoords: { lat: 12.9735, lng: 77.6430 },
+      hostTempMarker: null,
+      slots: SpotShareStorage.loadSlots(DEFAULT_IND_SLOTS)
+    };
+
+    // Instantiate Engines
+    const lockStorage = new MemoryLockStorage();
+    const reservationEngine = new ReservationEngine(lockStorage);
+
+    let leafletMap = null;
+    let mapMarkerList = [];
+    let userLocationMarker = null;
+
+    // ================= MAP INITIALIZATION =================
+    let mapInitRetryCount = 0;
+    function initializeMap() {
+      if (typeof L === 'undefined') {
+        if (mapInitRetryCount < 30) {
+          mapInitRetryCount++;
+          console.warn(`Leaflet CDN library not ready yet (attempt ${mapInitRetryCount}), retrying in 100ms...`);
+          setTimeout(initializeMap, 100);
+          return;
+        } else {
+          console.error("Leaflet CDN failed to load from primary CDN.");
+          const mapEl = document.getElementById('map');
+          if (mapEl) {
+            mapEl.innerHTML = `
+              <div class="h-full flex flex-col items-center justify-center p-6 text-center bg-surface-100 text-ink-300">
+                <i class="fa-solid fa-triangle-exclamation text-amberAccent-500 text-3xl mb-2"></i>
+                <p class="font-bold text-sm text-ink">Map Library Loading Error</p>
+                <p class="text-xs mt-1">Unable to load Leaflet map scripts. Check your internet connection.</p>
+                <button onclick="location.reload()" class="btn-gradient px-4 py-1.5 text-xs mt-3">Reload Page</button>
+              </div>
+            `;
+          }
+          return;
+        }
+      }
+
+      const mapElement = document.getElementById('map');
+      if (!mapElement) {
+        console.error("Map container #map not found");
+        return;
+      }
+
+      // Cleanup if previously initialized
+      if (leafletMap) {
+        try {
+          leafletMap.remove();
+        } catch (e) {
+          console.warn("Notice: Cleaning up previous map instance", e);
+        }
+        leafletMap = null;
+      }
+
+      if (mapElement._leaflet_id) {
+        mapElement._leaflet_id = null;
+      }
+
+      try {
+        leafletMap = L.map('map', {
+          zoomControl: true,
+          attributionControl: true
+        }).setView([appState.userLocation.lat, appState.userLocation.lng], 15);
+
+        // High-definition Esri World Street Map (100% Free, Zero API Key, Allows file:// & localhost)
+        const esriStreetTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom: 19,
+          attribution: 'Tiles &copy; Esri &mdash; StreetMap'
+        });
+
+        // OSM France Fallback (Free, zero API key, allows local origins)
+        const osmFrFallbackTiles = L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          subdomains: 'abc',
+          attribution: '&copy; OpenStreetMap contributors'
+        });
+
+        esriStreetTiles.addTo(leafletMap);
+
+        esriStreetTiles.on('tileerror', function() {
+          console.warn("Primary tile notice: Switching to secondary fallback layer.");
+          if (leafletMap && !leafletMap.hasLayer(osmFrFallbackTiles)) {
+            osmFrFallbackTiles.addTo(leafletMap);
+          }
+        });
+
+        // User Anchor Marker
+        updateUserMarkerPosition();
+
+        // Listen for map clicks in Host mode to pick driveway coordinates
+        leafletMap.on('click', (e) => {
+          if (appState.userRole === 'host') {
+            handleMapHostPinSelection(e.latlng.lat, e.latlng.lng);
+          }
+        });
+
+        // Update Center coordinates on pan
+        leafletMap.on('move', () => {
+          if (leafletMap) {
+            const center = leafletMap.getCenter();
+            const coordEl = document.getElementById('mapCenterCoords');
+            if (coordEl) coordEl.textContent = `${center.lat.toFixed(4)}° N, ${center.lng.toFixed(4)}° E`;
+          }
+        });
+
+        syncMapMarkers();
+
+        // Force Leaflet to recalculate container bounds after flexbox layout settles
+        setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(true); }, 100);
+        setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(true); }, 350);
+        setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(true); }, 800);
+
+      } catch (err) {
+        console.error("Map initialization exception:", err);
+      }
+    }
+
+    function updateUserMarkerPosition() {
+      if (!leafletMap) return;
+      if (userLocationMarker) {
+        leafletMap.removeLayer(userLocationMarker);
+      }
+
+      const userIcon = L.divIcon({
+        className: 'user-pin-container',
+        html: '<div class="marker-user"></div>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+      });
+
+      userLocationMarker = L.marker([appState.userLocation.lat, appState.userLocation.lng], { icon: userIcon }).addTo(leafletMap);
+      userLocationMarker.bindPopup(`
+        <div style="font-size:12px; font-weight:700; color:#2563EB;">
+          📍 You are here: ${appState.userLocation.name}
+        </div>
+      `);
+    }
+
+    function syncMapMarkers() {
+      if (!leafletMap) return;
+      mapMarkerList.forEach(m => {
+        if (m && m.marker && leafletMap) {
+          leafletMap.removeLayer(m.marker);
+        }
+      });
+      mapMarkerList = [];
+
+      appState.slots.forEach(slot => {
+        const isAvailable = slot.status === 'available';
+        const markerClass = isAvailable ? 'marker-available' : 'marker-occupied';
+
+        const customIcon = L.divIcon({
+          className: '',
+          html: `<div class="marker-pin-custom ${markerClass}" style="width:38px;height:38px;">₹${slot.rate}</div>`,
+          iconSize: [38, 38],
+          iconAnchor: [19, 19]
+        });
+
+        const marker = L.marker([slot.lat, slot.lng], { icon: customIcon }).addTo(leafletMap);
+
+        marker.bindPopup(`
+          <div style="min-width:180px;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:3px;color:#0F172A;">${slot.title}</div>
+            <div style="color:#64748B;font-size:11px;margin-bottom:8px;">${slot.address}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-weight:800;color:#2563EB;font-size:16px;">₹${slot.rate}<span style="font-weight:400;font-size:10px;color:#94A3B8;">/hr</span></span>
+              <span style="font-size:10px;color:#059669;background:#ECFDF5;padding:2px 7px;border-radius:6px;font-weight:700;">${slot.access}</span>
+            </div>
+            ${isAvailable ? `<button onclick="handleTriggerBookingModal(${slot.id})" style="width:100%;margin-top:10px;padding:7px;background:#2563EB;color:#fff;border-radius:8px;font-size:11px;font-weight:700;border:none;cursor:pointer;">Book This Spot</button>` : '<div style="margin-top:8px;font-size:11px;color:#EF4444;font-weight:bold;text-align:center;">Currently Occupied</div>'}
+          </div>
+        `);
+
+        marker.on('click', () => {
+          highlightCardBySlotId(slot.id);
+          drawWalkingRoute(appState.userLocation.lat, appState.userLocation.lng, slot.lat, slot.lng, slot.title);
+        });
+
+        mapMarkerList.push({ slotId: slot.id, marker });
+      });
+    }
+
+    function recenterMapToUser() {
+      if (leafletMap) {
+        leafletMap.flyTo([appState.userLocation.lat, appState.userLocation.lng], 15, { duration: 1.2 });
+        if (userLocationMarker) userLocationMarker.openPopup();
+      }
+    }
+
+    function flyToSlotOnMap(slotId) {
+      const target = appState.slots.find(s => s.id === slotId);
+      if (target && leafletMap) {
+        leafletMap.flyTo([target.lat, target.lng], 16, { duration: 1.0 });
+        const item = mapMarkerList.find(m => m.slotId === slotId);
+        if (item) item.marker.openPopup();
+        drawWalkingRoute(appState.userLocation.lat, appState.userLocation.lng, target.lat, target.lng, target.title);
+      }
+    }
+
+    function drawWalkingRoute(lat1, lon1, lat2, lon2, destinationTitle) {
+      if (appState.walkingPolyline) {
+        leafletMap.removeLayer(appState.walkingPolyline);
+      }
+
+      // Draw dashed walking path line
+      const points = [
+        [lat1, lon1],
+        [(lat1 + lat2) / 2 + 0.0003, (lon1 + lon2) / 2], // slight natural road curve
+        [lat2, lon2]
+      ];
+
+      appState.walkingPolyline = L.polyline(points, {
+        color: '#2563EB',
+        weight: 4,
+        dashArray: '8, 8',
+        opacity: 0.8
+      }).addTo(leafletMap);
+
+      const dist = SpatialService.haversineDistance(lat1, lon1, lat2, lon2);
+      const walkMin = SpatialService.getWalkingMinutes(dist);
+
+      const routePill = document.getElementById('mapRoutePill');
+      document.getElementById('mapRouteText').textContent = `${walkMin} min walk to ${destinationTitle} (${dist}m)`;
+      routePill.classList.remove('hidden');
+    }
+
+    function clearWalkingRoute() {
+      if (appState.walkingPolyline) {
+        leafletMap.removeLayer(appState.walkingPolyline);
+        appState.walkingPolyline = null;
+      }
+      document.getElementById('mapRoutePill').classList.add('hidden');
+    }
+
+    // ================= SLOTS FEED RENDERING =================
+    function renderSlots() {
+      const feed = document.getElementById('slotsFeedContainer');
+      const duration = parseInt(document.getElementById('bookingDuration').value);
+      const query = document.getElementById('destinationQuery').value;
+      const maxRadius = parseInt(document.getElementById('filterMaxRadius').value);
+      const vehicleClass = document.getElementById('driverVehicleType').value;
+
+      // SpatialService Radius, Category, Vehicle, and Text Filter
+      let filtered = SpatialService.filterAvailableSlots(
+        appState.slots,
+        appState.userLocation.lat,
+        appState.userLocation.lng,
+        {
+          maxRadiusMeters: maxRadius,
+          category: appState.activeCategoryFilter,
+          vehicleClass: vehicleClass,
+          query: query
+        }
+      );
+
+      // Sort criteria
+      if (appState.sortCriteria === 'price') {
+        filtered.sort((a, b) => a.rate - b.rate);
+      } else {
+        filtered.sort((a, b) => a.distanceMeters - b.distanceMeters);
+      }
+
+      feed.innerHTML = '';
+      document.getElementById('slotResultsCount').textContent = `${filtered.length} Found`;
+
+      if (filtered.length === 0) {
+        feed.innerHTML = `
+          <div class="crystal-card p-8 text-center text-ink-300">
+            <i class="fa-solid fa-car-tunnel text-3xl text-brand-400 mb-2"></i>
+            <p class="font-bold text-sm text-ink">No spots within ${maxRadius >= 1000 ? maxRadius/1000 + 'km' : maxRadius + 'm'}</p>
+            <p class="text-xs mt-1">Try widening the radius selector or choosing "All Spots".</p>
+            <button onclick="resetFilters()" class="btn-gradient px-4 py-1.5 text-xs mt-3">Reset All Filters</button>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach((slot) => {
+        const isOccupied = slot.status === 'occupied';
+        const totalPrice = slot.rate * duration;
+        const distLabel = slot.distanceMeters >= 1000
+          ? `${(slot.distanceMeters / 1000).toFixed(1)} km`
+          : `${slot.distanceMeters} m`;
+
+        const card = document.createElement('div');
+        card.id = `slot-card-${slot.id}`;
+        card.className = `crystal-card p-4 anim-fadeUp transition-all ${isOccupied ? 'opacity-55' : 'cursor-pointer hover:border-brand-300'}`;
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap mb-1">
+                <h4 class="text-sm font-bold text-ink truncate">${slot.title}</h4>
+                ${slot.ev ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-brand-50 text-brand-600 border border-brand-200 flex items-center gap-0.5"><i class="fa-solid fa-bolt text-[7px]"></i> EV READY</span>' : ''}
+              </div>
+              <p class="text-xs text-ink-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-person-walking text-brand-600"></i>
+                <span class="font-semibold text-ink-200">${slot.walkingMinutes} min walk</span>
+                <span>• ${distLabel} away • ${slot.address}</span>
+              </p>
+              <div class="flex items-center gap-3 mt-2 text-[11px] text-ink-300">
+                <span class="flex items-center gap-1">
+                  <i class="fa-solid fa-shield-halved text-brand-600 text-[10px]"></i> ${slot.access}
+                </span>
+                <span class="flex items-center gap-1">
+                  <i class="fa-solid fa-star text-amber-400 text-[10px]"></i> ${slot.hostRating} (${slot.host})
+                </span>
+              </div>
+            </div>
+
+            <!-- Hourly Rate -->
+            <div class="text-right flex-shrink-0">
+              <span class="text-lg font-black text-brand-600">₹${slot.rate}</span>
+              <span class="text-[10px] text-ink-300 block -mt-1 font-medium">/ hour</span>
+            </div>
+          </div>
+
+          <!-- Bottom Action Bar -->
+          <div class="mt-3 pt-3 border-t border-surface-200/80 flex items-center justify-between">
+            <div class="flex items-center gap-1 text-[11px] font-medium text-emeraldBadge-600 bg-emeraldBadge-50 px-2 py-0.5 rounded-md border border-emeraldBadge-100">
+              <i class="fa-solid fa-circle-check text-[10px]"></i> Instant Pass
+            </div>
+            ${isOccupied
+              ? (appState.activeReservation && appState.activeReservation.slotId === slot.id
+                  ? `<div class="flex items-center gap-2">
+                       <span class="text-[10px] font-bold text-emeraldBadge-600 bg-emeraldBadge-50 px-2 py-0.5 rounded border border-emeraldBadge-100 flex items-center gap-1">
+                         <span class="w-1.5 h-1.5 rounded-full bg-emeraldBadge-500 animate-pulse"></span> Your Spot
+                       </span>
+                       <button onclick="event.stopPropagation(); reopenActivePassModal()" class="text-xs text-brand-600 font-bold hover:underline">Manage</button>
+                     </div>`
+                  : '<span class="text-[10px] font-bold uppercase tracking-wider text-rose-500 bg-rose-50 px-2 py-1 rounded">Occupied</span>')
+              : `<button onclick="event.stopPropagation(); handleTriggerBookingModal(${slot.id})"
+                        class="btn-gradient px-3.5 py-1.5 text-xs font-semibold flex items-center gap-1.5">
+                  <span>Book Spot</span>
+                  <span class="opacity-70">•</span>
+                  <span>₹${totalPrice}</span>
+                 </button>`
+            }
+          </div>
+        `;
+
+        card.addEventListener('click', () => {
+          flyToSlotOnMap(slot.id);
+          highlightCardBySlotId(slot.id);
+        });
+
+        feed.appendChild(card);
+      });
+    }
+
+    function highlightCardBySlotId(slotId) {
+      document.querySelectorAll('#slotsFeedContainer > div').forEach(c => c.classList.remove('card-active-glow'));
+      const activeCard = document.getElementById(`slot-card-${slotId}`);
+      if (activeCard) {
+        activeCard.classList.add('card-active-glow');
+        activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    // ================= CORRIDOR ANCHOR SHORTCUTS =================
+    function setCorridorAnchor(type, name, lat, lng) {
+      appState.userLocation = { lat, lng, name };
+      document.getElementById('activeAnchorLabel').textContent = name;
+      document.getElementById('destinationQuery').value = name;
+      document.getElementById('currentH3HexBadge').innerHTML = `<i class="fa-solid fa-location-dot text-[9px]"></i> ${name.split('/')[0].trim()} • Live`;
+
+      updateUserMarkerPosition();
+      leafletMap.flyTo([lat, lng], 15, { duration: 1.0 });
+      clearWalkingRoute();
+      renderSlots();
+      displayToastNotification(`Location set to ${name}. Recalculating walking radii.`, "info");
+    }
+
+    function resetFilters() {
+      document.getElementById('destinationQuery').value = '';
+      document.getElementById('filterMaxRadius').value = '2500';
+      document.getElementById('driverVehicleType').value = 'all';
+      setCategoryFilter('all', document.querySelector('.category-chip'));
+    }
+
+    // ================= CATEGORY & SORT HANDLERS =================
+    function setCategoryFilter(category, btnElement) {
+      appState.activeCategoryFilter = category;
+      document.querySelectorAll('.category-chip').forEach(btn => {
+        btn.className = "category-chip px-3 py-1 rounded-lg font-semibold bg-surface-100 text-ink-200 hover:bg-surface-200 transition-all flex items-center gap-1 whitespace-nowrap";
+      });
+      btnElement.className = "category-chip px-3 py-1 rounded-lg font-semibold bg-brand-600 text-white shadow-sm transition-all flex items-center gap-1 whitespace-nowrap";
+      renderSlots();
+    }
+
+    function toggleSortCriteria() {
+      if (appState.sortCriteria === 'distance') {
+        appState.sortCriteria = 'price';
+        document.getElementById('sortLabel').textContent = "Sort: Lowest Price";
+        displayToastNotification("Sorting by lowest hourly price", "info");
+      } else {
+        appState.sortCriteria = 'distance';
+        document.getElementById('sortLabel').textContent = "Sort: Walking Dist";
+        displayToastNotification("Sorting by closest walking distance", "info");
+      }
+      renderSlots();
+    }
+
+    function handleSearchFilterChange() {
+      renderSlots();
+    }
+
+    function handleDurationChange() {
+      renderSlots();
+    }
+
+    function resetDestinationQuery() {
+      document.getElementById('destinationQuery').value = '';
+      renderSlots();
+    }
+
+    // ================= ROLE SWITCHER =================
+    function switchUserRole(role) {
+      appState.userRole = role;
+      const btnDriver = document.getElementById('btnDriverRole');
+      const btnHost = document.getElementById('btnHostRole');
+      const indicator = document.getElementById('rolePillIndicator');
+      const driverView = document.getElementById('driverContainer');
+      const hostView = document.getElementById('hostContainer');
+
+      if (role === 'driver') {
+        btnDriver.classList.add('active');
+        btnHost.classList.remove('active');
+        indicator.style.left = btnDriver.offsetLeft + 'px';
+        indicator.style.width = btnDriver.offsetWidth + 'px';
+        driverView.classList.remove('hidden');
+        hostView.classList.add('hidden');
+        document.getElementById('mapStatusHeading').textContent = "Neighborhood Parking Map";
+        if (appState.hostTempMarker && leafletMap) leafletMap.removeLayer(appState.hostTempMarker);
+      } else {
+        btnHost.classList.add('active');
+        btnDriver.classList.remove('active');
+        indicator.style.left = btnHost.offsetLeft + 'px';
+        indicator.style.width = btnHost.offsetWidth + 'px';
+        hostView.classList.remove('hidden');
+        driverView.classList.add('hidden');
+        document.getElementById('mapStatusHeading').textContent = "Host Map • Click to place your driveway pin";
+        calculateHostYield();
+        renderHostManagedBays();
+        placeHostPinAtCurrentCenter();
+      }
+
+      setTimeout(() => {
+        if (leafletMap) leafletMap.invalidateSize(true);
+      }, 200);
+    }
+
+    // ================= HOST TAB & PIN MANAGEMENT =================
+    function switchHostTab(tab) {
+      const tabForm = document.getElementById('tabHostForm');
+      const tabManage = document.getElementById('tabHostManage');
+      const formCard = document.getElementById('hostFormCard');
+      const manageCard = document.getElementById('hostManageCard');
+
+      if (tab === 'form') {
+        tabForm.className = "flex-1 py-1.5 rounded-lg font-bold bg-white text-ink shadow-sm transition-all text-center";
+        tabManage.className = "flex-1 py-1.5 rounded-lg font-medium text-ink-300 hover:text-ink transition-all text-center";
+        formCard.classList.remove('hidden');
+        manageCard.classList.add('hidden');
+      } else {
+        tabManage.className = "flex-1 py-1.5 rounded-lg font-bold bg-white text-ink shadow-sm transition-all text-center";
+        tabForm.className = "flex-1 py-1.5 rounded-lg font-medium text-ink-300 hover:text-ink transition-all text-center";
+        manageCard.classList.remove('hidden');
+        formCard.classList.add('hidden');
+        renderHostManagedBays();
+      }
+    }
+
+    function handleMapHostPinSelection(lat, lng) {
+      appState.hostPendingCoords = { lat, lng };
+      document.getElementById('inputHostCoords').value = `${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E`;
+
+      if (appState.hostTempMarker) {
+        leafletMap.removeLayer(appState.hostTempMarker);
+      }
+
+      const hostIcon = L.divIcon({
+        className: '',
+        html: '<div style="background:#10B981;color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 4px 12px rgba(16,185,129,0.4);font-size:14px;"><i class="fa-solid fa-house"></i></div>',
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      });
+
+      appState.hostTempMarker = L.marker([lat, lng], { icon: hostIcon }).addTo(leafletMap);
+      appState.hostTempMarker.bindPopup('<strong>New Driveway Pin</strong><br/>Ready to publish!').openPopup();
+      displayToastNotification(`Driveway pin placed at ${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E`, "info");
+    }
+
+    function placeHostPinAtCurrentCenter() {
+      const center = leafletMap.getCenter();
+      handleMapHostPinSelection(center.lat, center.lng);
+    }
+
+    function renderHostManagedBays() {
+      const container = document.getElementById('hostMyBaysList');
+      const mySlots = appState.slots.filter(s => s.host.includes("You") || s.id === 1);
+      document.getElementById('hostBayCount').textContent = mySlots.length;
+
+      container.innerHTML = '';
+
+      if (mySlots.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center rounded-xl bg-surface-100/50 border border-dashed border-surface-300 space-y-2">
+            <div class="w-10 h-10 rounded-full bg-surface-200 text-ink-300 flex items-center justify-center mx-auto text-sm">
+              <i class="fa-solid fa-house-chimney"></i>
+            </div>
+            <p class="text-xs font-bold text-ink">No Parking Bays Listed</p>
+            <p class="text-[11px] text-ink-300">You currently don't have any driveways listed for rent.</p>
+            <button onclick="switchHostTab('form')" class="btn-gradient px-3 py-1.5 text-xs font-semibold mt-1">
+              + Add Driveway
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      mySlots.forEach(s => {
+        const item = document.createElement('div');
+        item.className = "p-3 bg-white border border-surface-200 rounded-xl flex items-center justify-between text-xs shadow-xs hover:border-brand-300 transition-all";
+        item.innerHTML = `
+          <div class="min-w-0 flex-1 pr-2">
+            <div class="font-bold text-ink truncate">${s.title}</div>
+            <div class="text-[11px] text-ink-300">₹${s.rate}/hr • ${s.access}</div>
+          </div>
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded ${s.status === 'available' ? 'bg-emeraldBadge-50 text-emeraldBadge-600 border border-emeraldBadge-100' : 'bg-roseBadge-50 text-roseBadge-600 border border-roseBadge-100'}">
+              ${s.status.toUpperCase()}
+            </span>
+            <button onclick="toggleSlotAvailability(${s.id})" class="btn-neutral px-2 py-1 text-[10px] font-semibold" title="Pause or resume availability">
+              Toggle
+            </button>
+            <button onclick="deleteHostBay(${s.id})" class="w-7 h-7 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-roseBadge-600 flex items-center justify-center text-xs transition-colors" title="Remove driveway listing">
+              <i class="fa-regular fa-trash-can"></i>
+            </button>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function toggleSlotAvailability(slotId) {
+      const slot = appState.slots.find(s => s.id === slotId);
+      if (slot) {
+        slot.status = slot.status === 'available' ? 'occupied' : 'available';
+        SpotShareStorage.saveSlots(appState.slots);
+        syncMapMarkers();
+        renderSlots();
+        renderHostManagedBays();
+        displayToastNotification(`${slot.title} status changed to ${slot.status}`, "info");
+      }
+    }
+
+    function deleteHostBay(slotId) {
+      const slot = appState.slots.find(s => s.id === slotId);
+      if (!slot) return;
+
+      if (appState.activeReservation && appState.activeReservation.slotId === slotId) {
+        displayToastNotification("Cannot remove bay while an active parking reservation is in progress.", "error");
+        return;
+      }
+
+      appState.pendingDeleteSlotId = slotId;
+      document.getElementById('deleteBayTitle').textContent = slot.title;
+      document.getElementById('deleteBayAddress').textContent = slot.address;
+      document.getElementById('deleteBayModal').classList.add('active');
+    }
+
+    function closeDeleteBayModal() {
+      appState.pendingDeleteSlotId = null;
+      document.getElementById('deleteBayModal').classList.remove('active');
+    }
+
+    function confirmExecuteDeleteBay() {
+      const slotId = appState.pendingDeleteSlotId;
+      if (!slotId) return;
+
+      const slot = appState.slots.find(s => s.id === slotId);
+      const title = slot ? slot.title : "Parking space";
+
+      appState.slots = appState.slots.filter(s => s.id !== slotId);
+      appState.pendingDeleteSlotId = null;
+      SpotShareStorage.saveSlots(appState.slots);
+
+      closeDeleteBayModal();
+      syncMapMarkers();
+      renderSlots();
+      renderHostManagedBays();
+
+      displayToastNotification(`"${title}" has been removed from your listed bays.`, "info");
+    }
+
+    function calculateHostYield() {
+      const hours = parseInt(document.getElementById('sliderHours').value);
+      const rate = parseInt(document.getElementById('sliderRate').value);
+
+      document.getElementById('sliderHoursDisplay').textContent = `${hours} Hours`;
+      document.getElementById('sliderRateDisplay').textContent = `₹${rate} / hr`;
+
+      const monthly = hours * rate * 30;
+      document.getElementById('calcProjectedYield').innerHTML = `₹${monthly.toLocaleString('en-IN')} <span class="text-xs text-ink-300 font-normal">/ slot</span>`;
+    }
+
+    function updateSimulatorFromInput() {
+      const val = parseInt(document.getElementById('inputHostRate').value) || 45;
+      document.getElementById('sliderRate').value = Math.min(150, Math.max(25, val));
+      calculateHostYield();
+    }
+
+    function handleHostSlotSubmission(e) {
+      e.preventDefault();
+      const title = document.getElementById('inputHostTitle').value.trim();
+      const rate = parseInt(document.getElementById('inputHostRate').value);
+      const access = document.getElementById('inputHostAccess').value;
+      const hasEv = document.getElementById('inputHostHasEv').checked;
+
+      const lat = appState.hostPendingCoords.lat;
+      const lng = appState.hostPendingCoords.lng;
+      const h3Hex = SpatialService.computeH3Hex(lat, lng);
+
+      const newSlot = {
+        id: Date.now(),
+        title: title,
+        address: "Indiranagar Hub, Bangalore",
+        lat: lat,
+        lng: lng,
+        rate: rate,
+        access: access,
+        host: "You (Verified Host)",
+        hostRating: 5.0,
+        status: "available",
+        ev: hasEv,
+        h3Hex: h3Hex
+      };
+
+      appState.slots.unshift(newSlot);
+      SpotShareStorage.saveSlots(appState.slots);
+      if (appState.hostTempMarker) leafletMap.removeLayer(appState.hostTempMarker);
+
+      syncMapMarkers();
+      renderSlots();
+      renderHostManagedBays();
+      switchUserRole('driver');
+      flyToSlotOnMap(newSlot.id);
+      displayToastNotification("Your driveway is now live! Neighbors can find and book it instantly.", "success");
+
+      document.getElementById('hostNewSlotForm').reset();
+    }
+
+    // ================= BOOKING & DISTRIBUTED LOCK FLOW =================
+    async function handleTriggerBookingModal(slotId) {
+      const slot = appState.slots.find(s => s.id === slotId);
+      if (!slot || slot.status !== 'available') return;
+
+      try {
+        // Concurrency-Safe Lock Acquisition (5-minute TTL)
+        await reservationEngine.acquireSlotLock(slot.id, 'driver-current-session', 300);
+      } catch (err) {
+        displayToastNotification(err.message, "error");
+        return;
+      }
+
+      appState.selectedSlot = slot;
+      const duration = parseInt(document.getElementById('bookingDuration').value);
+
+      document.getElementById('checkoutSlotTitle').textContent = slot.title;
+      document.getElementById('checkoutSlotAddress').textContent = slot.address;
+      document.getElementById('modalDurationDisplay').textContent = `${duration} Hour${duration > 1 ? 's' : ''}`;
+      document.getElementById('checkoutBaseAmount').textContent = `₹${slot.rate * duration} (₹${slot.rate} × ${duration}h)`;
+      document.getElementById('checkoutAccessLabel').textContent = slot.access;
+      document.getElementById('checkoutTotalAmount').textContent = `₹${slot.rate * duration}`;
+      const btnAmtEl = document.getElementById('checkoutBtnAmount');
+      if (btnAmtEl) btnAmtEl.textContent = `₹${slot.rate * duration}`;
+
+      document.getElementById('checkoutModal').classList.add('active');
+      runLockCountdown(300);
+    }
+
+    function adjustModalDuration(delta) {
+      if (!appState.selectedSlot) return;
+      let dur = parseInt(document.getElementById('bookingDuration').value) + delta;
+      if (dur < 1) dur = 1;
+      if (dur > 12) dur = 12;
+
+      document.getElementById('bookingDuration').value = dur;
+      document.getElementById('modalDurationDisplay').textContent = `${dur} Hour${dur > 1 ? 's' : ''}`;
+      document.getElementById('checkoutBaseAmount').textContent = `₹${appState.selectedSlot.rate * dur} (₹${appState.selectedSlot.rate} × ${dur}h)`;
+      document.getElementById('checkoutTotalAmount').textContent = `₹${appState.selectedSlot.rate * dur}`;
+      const btnAmtEl = document.getElementById('checkoutBtnAmount');
+      if (btnAmtEl) btnAmtEl.textContent = `₹${appState.selectedSlot.rate * dur}`;
+      renderSlots();
+    }
+
+    function closeCheckoutModal() {
+      // Concurrency Safety: Release the distributed lock if the user closes/cancels
+      if (appState.selectedSlot) {
+        reservationEngine.releaseSlotLock(appState.selectedSlot.id, 'driver-current-session');
+        appState.selectedSlot = null;
+      }
+
+      document.getElementById('checkoutModal').classList.remove('active');
+      clearInterval(appState.lockTimerInterval);
+    }
+
+    function runLockCountdown(seconds) {
+      clearInterval(appState.lockTimerInterval);
+      let remaining = seconds;
+      const timerEl = document.getElementById('checkoutLockCountdown');
+
+      appState.lockTimerInterval = setInterval(() => {
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+        if (remaining <= 0) {
+          clearInterval(appState.lockTimerInterval);
+          closeCheckoutModal();
+          displayToastNotification("5-minute lock expired: Slot released back to public grid.", "error");
+        }
+        remaining--;
+      }, 1000);
+    }
+
+    // ================= PAYMENT WINDOW & PAYMENT DONE FLOW =================
+    function openPaymentModal() {
+      const plate = document.getElementById('checkoutVehiclePlate').value.trim();
+      if (!plate) {
+        displayToastNotification("Please enter your vehicle license plate.", "error");
+        return;
+      }
+
+      const slot = appState.selectedSlot;
+      if (!slot) return;
+
+      const duration = parseInt(document.getElementById('bookingDuration').value);
+      const totalAmount = slot.rate * duration;
+
+      document.getElementById('paymentModalAmount').textContent = `₹${totalAmount}`;
+      document.getElementById('paymentBtnVal').textContent = `${totalAmount}`;
+      document.getElementById('paymentModalSlotTitle').textContent = slot.title;
+      document.getElementById('paymentModalDurationPlate').textContent = `${duration} Hour${duration > 1 ? 's' : ''} • ${plate.toUpperCase()}`;
+
+      // Temporarily hide checkout modal to show payment modal (keeps lock active)
+      document.getElementById('checkoutModal').classList.remove('active');
+      document.getElementById('paymentProcessingModal').classList.add('active');
+    }
+
+    function closePaymentProcessingModal() {
+      document.getElementById('paymentProcessingModal').classList.remove('active');
+      // Return back to checkout window if still holding lock
+      if (appState.selectedSlot) {
+        document.getElementById('checkoutModal').classList.add('active');
+      }
+    }
+
+    async function triggerPaymentSuccess() {
+      const slot = appState.selectedSlot;
+      if (!slot) return;
+
+      const plate = document.getElementById('checkoutVehiclePlate').value.trim();
+      const duration = parseInt(document.getElementById('bookingDuration').value);
+
+      // Finalize Reservation via engine
+      const reservation = await reservationEngine.finalizeReservation(
+        slot.id,
+        { plate: plate },
+        duration,
+        slot.rate
+      );
+
+      // Mark slot occupied
+      slot.status = 'occupied';
+      appState.activeReservation = reservation;
+
+      syncMapMarkers();
+      renderSlots();
+
+      // Clear the distributed lock timer now that it's confirmed
+      clearInterval(appState.lockTimerInterval);
+      appState.selectedSlot = null;
+
+      // Close Payment Processing Window
+      document.getElementById('paymentProcessingModal').classList.remove('active');
+
+      // Populate Payment Done Page with full reservation details
+      const expiry = new Date(reservation.endTime);
+      const expiryStr = expiry.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+      document.getElementById('donePaidAmount').textContent = `${reservation.totalAmount}`;
+      document.getElementById('doneTxnRef').textContent = `TXN-UPI-${Math.floor(10000000 + Math.random() * 90000000)}`;
+      document.getElementById('doneSlotTitle').textContent = slot.title;
+      document.getElementById('doneSlotAddress').textContent = slot.address;
+      document.getElementById('donePassCodeBadge').textContent = `#${reservation.id}`;
+      document.getElementById('doneVehiclePlate').textContent = reservation.driverPlate.toUpperCase();
+      document.getElementById('doneDurationTime').textContent = `${duration} Hour${duration > 1 ? 's' : ''}`;
+      document.getElementById('doneValidTill').textContent = expiryStr;
+      document.getElementById('doneAccessType').textContent = slot.access;
+
+      // Open Payment Done Modal
+      document.getElementById('paymentDoneModal').classList.add('active');
+
+      // Update Nav Badge & Driver Banner
+      document.getElementById('navPassCode').textContent = `${reservation.id}`;
+      document.getElementById('navPassBadge').classList.remove('hidden');
+      updateActiveBookingBanner();
+
+      // Persist to local browser database
+      SpotShareStorage.saveSlots(appState.slots);
+      SpotShareStorage.saveReservation(reservation);
+
+      displayToastNotification(`Payment Done! ₹${reservation.totalAmount} received. Spot reserved.`, "success");
+    }
+
+    function openPassFromPaymentDone() {
+      document.getElementById('paymentDoneModal').classList.remove('active');
+      if (appState.activeReservation) {
+        const slot = appState.slots.find(s => s.id === appState.activeReservation.slotId);
+        if (slot) {
+          renderActiveParkingPass(appState.activeReservation, slot);
+        }
+      }
+    }
+
+    function closePaymentDoneModal() {
+      document.getElementById('paymentDoneModal').classList.remove('active');
+    }
+
+    // ================= PARKING PASS & LIVE COUNTDOWN =================
+    function renderActiveParkingPass(reservation, slot) {
+      const expiry = new Date(reservation.endTime);
+      const expiryStr = expiry.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+      document.getElementById('passModalSlotTitle').textContent = slot.title;
+      document.getElementById('passMetaCode').textContent = `${reservation.id}`;
+      document.getElementById('passMetaPlate').textContent = reservation.driverPlate.toUpperCase();
+      document.getElementById('passMetaExpiry').textContent = expiryStr;
+
+      // Tailored modality instructions
+      let accessMsg = "Show this QR pass at the entrance gate or to the security guard.";
+      if (slot.access.includes("Direct")) accessMsg = "Direct Driveway: Gates are open. Drive straight in.";
+      else if (slot.access.includes("Flap") || slot.access.includes("Barrier")) accessMsg = "Smart gate barrier will automatically lower upon arrival.";
+      document.getElementById('passAccessInstruction').textContent = accessMsg;
+
+      drawCryptographicQR(reservation.id);
+      startPassLiveCountdown(reservation.endTime);
+
+      document.getElementById('parkingPassModal').classList.add('active');
+    }
+
+    function startPassLiveCountdown(endTimeStr) {
+      clearInterval(appState.passCountdownInterval);
+      const targetTime = new Date(endTimeStr).getTime();
+
+      function update() {
+        const now = Date.now();
+        const diff = targetTime - now;
+
+        if (diff <= 0) {
+          clearInterval(appState.passCountdownInterval);
+          document.getElementById('passLiveCountdown').innerHTML = `<span class="text-rose-600 font-bold">SESSION ENDED</span>`;
+          const bannerCountdownEl = document.getElementById('bannerCountdown');
+          if (bannerCountdownEl) bannerCountdownEl.textContent = "00h 00m (Expired)";
+
+          // Automatically clear and reopen spot for new ones
+          if (appState.autoReleaseOnExpiry && appState.activeReservation) {
+            triggerAutoClearSpot(appState.activeReservation);
+          }
+          return;
+        }
+
+        const hrs = Math.floor(diff / 3600000);
+        const mins = Math.floor((diff % 3600000) / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+
+        const countdownStr = `${hrs.toString().padStart(2, '0')}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
+        document.getElementById('passLiveCountdown').textContent = countdownStr;
+        const bannerCountdownEl = document.getElementById('bannerCountdown');
+        if (bannerCountdownEl) bannerCountdownEl.textContent = countdownStr;
+      }
+
+      update();
+      appState.passCountdownInterval = setInterval(update, 1000);
+    }
+
+    function reopenActivePassModal() {
+      if (appState.activeReservation) {
+        const slot = appState.slots.find(s => s.id === appState.activeReservation.slotId);
+        renderActiveParkingPass(appState.activeReservation, slot);
+      }
+    }
+
+    function closeParkingPassModal() {
+      document.getElementById('parkingPassModal').classList.remove('active');
+    }
+
+    // ================= CHECK-OUT & OVERSTAY FLOWS =================
+    function handleCheckOutAndReleaseSlot() {
+      if (!appState.activeReservation) return;
+
+      const slot = appState.slots.find(s => s.id === appState.activeReservation.slotId);
+      if (slot) {
+        slot.status = 'available';
+      }
+
+      clearInterval(appState.passCountdownInterval);
+      const passId = appState.activeReservation.id;
+      appState.activeReservation = null;
+
+      syncMapMarkers();
+      renderSlots();
+      clearWalkingRoute();
+      closeParkingPassModal();
+      updateActiveBookingBanner();
+
+      document.getElementById('navPassBadge').classList.add('hidden');
+      displayToastNotification(`Parking completed for Pass ${passId}. Spot released! Receipt sent via UPI.`, "success");
+    }
+
+    function simulateBarrierUnlock() {
+      displayToastNotification("Pass verified! Smart gate barrier opened. Welcome in!", "success");
+    }
+
+    function simulateOverstayTrigger() {
+      if (!appState.activeReservation) return;
+
+      const slot = appState.slots.find(s => s.id === appState.activeReservation.slotId);
+      const simulatedEndTime = new Date(Date.now() - 35 * 60000); // 35 minutes past checkout
+
+      const surge = reservationEngine.calculateOverstaySurge(slot.rate, simulatedEndTime, new Date());
+
+      displayToastNotification(
+        `Overtime notice: 35 mins elapsed (15m free grace + ${surge.billableMinutes}m billable). ₹${surge.surgeAmount} overtime fee applied to support host.`,
+        "info"
+      );
+    }
+
+    function copyPassCodeToClipboard() {
+      if (appState.activeReservation) {
+        navigator.clipboard.writeText(appState.activeReservation.id);
+        displayToastNotification("Pass code copied to clipboard", "info");
+      }
+    }
+
+    // ================= ACTIVE BOOKING BANNER & AUTO-CLEAR LOGIC =================
+    function updateActiveBookingBanner() {
+      const banner = document.getElementById('driverActiveBookingBanner');
+      if (!banner) return;
+
+      if (appState.activeReservation) {
+        const slot = appState.slots.find(s => s.id === appState.activeReservation.slotId);
+        if (slot) {
+          document.getElementById('bannerSlotTitle').textContent = slot.title;
+          const expiry = new Date(appState.activeReservation.endTime);
+          const expiryStr = expiry.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+          document.getElementById('bannerSlotTime').innerHTML =
+            `Valid until ${expiryStr} • <span id="bannerCountdown" class="font-mono font-bold text-brand-600">--:--</span> remaining`;
+          banner.classList.remove('hidden');
+        }
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+
+    function fastForwardSessionToExpiry() {
+      if (!appState.activeReservation) {
+        displayToastNotification("No active booking to fast forward. Book a spot first!", "info");
+        return;
+      }
+      displayToastNotification("Fast-forwarding session to 5 seconds remaining...", "info");
+      const quickEndTime = new Date(Date.now() + 5000).toISOString();
+      appState.activeReservation.endTime = quickEndTime;
+      startPassLiveCountdown(quickEndTime);
+    }
+
+    function triggerAutoClearSpot(reservation) {
+      if (!reservation) return;
+      const slot = appState.slots.find(s => s.id === reservation.slotId);
+      if (slot) {
+        slot.status = 'available';
+      }
+
+      appState.activeReservation = null;
+      clearInterval(appState.passCountdownInterval);
+
+      // Persist to local browser database
+      SpotShareStorage.saveSlots(appState.slots);
+      SpotShareStorage.saveReservation(null);
+
+      syncMapMarkers();
+      renderSlots();
+      clearWalkingRoute();
+      closeParkingPassModal();
+      updateActiveBookingBanner();
+
+      document.getElementById('navPassBadge').classList.add('hidden');
+      displayToastNotification(
+        `⏱ Session completed! ${slot ? slot.title : 'Parking space'} has been automatically cleared and reopened for new bookings.`,
+        "success"
+      );
+    }
+
+    function checkAndAutoClearExpiredSlots() {
+      if (!appState.activeReservation || !appState.autoReleaseOnExpiry) return;
+      const now = Date.now();
+      const endTime = new Date(appState.activeReservation.endTime).getTime();
+      if (now >= endTime) {
+        triggerAutoClearSpot(appState.activeReservation);
+      }
+    }
+
+    // ================= UNMAINTAINED SPOT & 100% REFUND FLOW =================
+    function openReportIssueModal() {
+      if (!appState.activeReservation) return;
+      const slot = appState.slots.find(s => s.id === appState.activeReservation.slotId);
+      const total = appState.activeReservation.totalAmount;
+
+      document.getElementById('reportModalSlotTitle').textContent = slot ? slot.title : "Parking Bay";
+      document.getElementById('reportRefundTotal').textContent = `₹${total} (100% Full Refund)`;
+
+      appState.uploadedIssuePhoto = null;
+      document.getElementById('uploadPromptContainer').classList.remove('hidden');
+      document.getElementById('uploadPreviewContainer').classList.add('hidden');
+      document.getElementById('issuePhotoInput').value = '';
+
+      document.getElementById('reportIssueModal').classList.add('active');
+    }
+
+    function closeReportIssueModal() {
+      document.getElementById('reportIssueModal').classList.remove('active');
+    }
+
+    function handleIssuePhotoSelect(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        appState.uploadedIssuePhoto = e.target.result;
+        document.getElementById('issuePhotoPreview').src = e.target.result;
+        document.getElementById('uploadPromptContainer').classList.add('hidden');
+        document.getElementById('uploadPreviewContainer').classList.remove('hidden');
+        displayToastNotification("Photo uploaded and verified.", "info");
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function loadSampleProofPhoto() {
+      const samplePhotoUrl = "https://images.unsplash.com/photo-1590674899484-d5640e854abe?auto=format&fit=crop&w=600&q=80";
+      appState.uploadedIssuePhoto = samplePhotoUrl;
+      document.getElementById('issuePhotoPreview').src = samplePhotoUrl;
+      document.getElementById('uploadPromptContainer').classList.add('hidden');
+      document.getElementById('uploadPreviewContainer').classList.remove('hidden');
+      displayToastNotification("Proof photo attached: Blocked gate verified.", "info");
+    }
+
+    function submitIssueReportAndRefund() {
+      if (!appState.activeReservation) return;
+
+      if (!appState.uploadedIssuePhoto) {
+        displayToastNotification("Please attach a photo of the condition to process your 100% refund.", "error");
+        return;
+      }
+
+      const slot = appState.slots.find(s => s.id === appState.activeReservation.slotId);
+      const refundAmount = appState.activeReservation.totalAmount;
+      const reasonSelect = document.getElementById('reportIssueReason');
+      const reasonText = reasonSelect ? reasonSelect.selectedOptions[0].text : "Unmaintained driveway";
+
+      if (slot) {
+        slot.status = 'available';
+      }
+
+      clearInterval(appState.passCountdownInterval);
+      appState.activeReservation = null;
+      appState.uploadedIssuePhoto = null;
+
+      // Persist to local browser database
+      SpotShareStorage.saveSlots(appState.slots);
+      SpotShareStorage.saveReservation(null);
+
+      syncMapMarkers();
+      renderSlots();
+      clearWalkingRoute();
+      closeReportIssueModal();
+      closeParkingPassModal();
+      updateActiveBookingBanner();
+
+      document.getElementById('navPassBadge').classList.add('hidden');
+
+      displayToastNotification(
+        `Issue verified. 100% refund of ₹${refundAmount} credited back to your UPI. Spot released!`,
+        "success"
+      );
+    }
+
+    // ================= CRYPTOGRAPHIC QR RENDERING =================
+    function drawCryptographicQR(payload) {
+      const canvas = document.getElementById('qrGateCanvas');
+      const ctx = canvas.getContext('2d');
+      const size = 140;
+      const cellSize = 5;
+      const grid = Math.floor(size / cellSize);
+      ctx.clearRect(0, 0, size, size);
+
+      let hash = 0;
+      for (let i = 0; i < payload.length; i++) {
+        hash = ((hash << 5) - hash) + payload.charCodeAt(i);
+        hash |= 0;
+      }
+
+      ctx.fillStyle = '#0F172A';
+
+      function drawCornerPattern(x, y) {
+        ctx.fillRect(x, y, cellSize * 7, cellSize * 7);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(x + cellSize, y + cellSize, cellSize * 5, cellSize * 5);
+        ctx.fillStyle = '#0F172A';
+        ctx.fillRect(x + cellSize * 2, y + cellSize * 2, cellSize * 3, cellSize * 3);
+      }
+
+      drawCornerPattern(0, 0);
+      drawCornerPattern(size - cellSize * 7, 0);
+      drawCornerPattern(0, size - cellSize * 7);
+
+      let seed = Math.abs(hash);
+      for (let r = 0; r < grid; r++) {
+        for (let c = 0; c < grid; c++) {
+          if ((r < 8 && c < 8) || (r < 8 && c > grid - 9) || (r > grid - 9 && c < 8)) continue;
+          seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+          if (seed % 3 === 0) {
+            ctx.fillStyle = '#0F172A';
+            ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+          }
+        }
+      }
+    }
+
+    // ================= TOAST NOTIFICATION UTILITY =================
+    function displayToastNotification(message, type = 'info') {
+      const tray = document.getElementById('toastTray');
+      const icons = {
+        success: '<i class="fa-solid fa-circle-check text-emeraldBadge-500"></i>',
+        error: '<i class="fa-solid fa-triangle-exclamation text-roseBadge-500"></i>',
+        info: '<i class="fa-solid fa-circle-info text-brand-600"></i>'
+      };
+
+      const card = document.createElement('div');
+      card.className = 'toast-card';
+      card.innerHTML = `
+        <span class="text-base">${icons[type] || icons.info}</span>
+        <span class="text-xs text-ink font-semibold flex-1">${message}</span>
+      `;
+
+      tray.appendChild(card);
+      setTimeout(() => {
+        card.classList.add('toast-exit');
+        setTimeout(() => card.remove(), 250);
+      }, 3400);
+    }
+
+    // ================= INITIALIZATION & BOOTSTRAP =================
+    function initPillIndicator() {
+      const btn = document.getElementById('btnDriverRole');
+      const ind = document.getElementById('rolePillIndicator');
+      if (btn && ind) {
+        requestAnimationFrame(() => {
+          ind.style.left = btn.offsetLeft + 'px';
+          ind.style.width = btn.offsetWidth + 'px';
+        });
+      }
+    }
+
+    function bootSpotShareApp() {
+      // Restore active reservation badge if stored in local database
+      if (appState.activeReservation) {
+        const now = Date.now();
+        const expiry = new Date(appState.activeReservation.endTime).getTime();
+        if (now >= expiry) {
+          triggerAutoClearSpot(appState.activeReservation);
+        } else {
+          const passCode = document.getElementById('navPassCode');
+          const passBadge = document.getElementById('navPassBadge');
+          if (passCode) passCode.textContent = `${appState.activeReservation.id}`;
+          if (passBadge) passBadge.classList.remove('hidden');
+        }
+      }
+
+      initializeMap();
+      renderSlots();
+      initPillIndicator();
+      calculateHostYield();
+      updateActiveBookingBanner();
+      setInterval(checkAndAutoClearExpiredSlots, 1000);
+    }
+
+    function resetDemoData() {
+      if (confirm("Reset local database to initial Indiranagar prototype spots?")) {
+        appState.slots = SpotShareStorage.resetDatabase(DEFAULT_IND_SLOTS);
+        appState.activeReservation = null;
+        const navPass = document.getElementById('navPassBadge');
+        if (navPass) navPass.classList.add('hidden');
+        clearWalkingRoute();
+        syncMapMarkers();
+        renderSlots();
+        renderHostManagedBays();
+        updateActiveBookingBanner();
+        displayToastNotification("Local database reset to default Indiranagar prototype bays.", "success");
+      }
+    }
+
+    // Ensure app boots whether DOMContentLoaded has already fired or is pending
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootSpotShareApp);
+    } else {
+      bootSpotShareApp();
+    }
+
+    // Invalidate map size on window resize
+    window.addEventListener('resize', () => {
+      initPillIndicator();
+      if (leafletMap) {
+        leafletMap.invalidateSize(true);
+      }
+    });
+  </script>
+</body>
+</html>
